@@ -1,0 +1,134 @@
+Copyright (c) 2016-2018, Mellanox Technologies
+All rights reserved.
+
+License: BSD
+
+BlueField PKA Tests Suite
+
+Author, Khalil Blaiech <kblaiech@mellanox.com>
+
+
+===============================================================================
+Overview
+===============================================================================
+
+The BlueField PKA Tests Suite consists of a set of tests application, an
+independant set of test routines that run against the API implementation
+and verifies that it correctly implements all of the defined APIs at a
+functional level.
+
+The BlueField PKA Tests Suite is intended to be used solely for QA and
+verification purposes. Tests wouldn't be exposed to customers nor users.
+
+
+===============================================================================
+Important Notes
+===============================================================================
+
+  * The PKA tests suite requires the PKA libraries and drivers installed.
+    Look at 'README' to build and install PKA libraries and drivers.
+
+===============================================================================
+How to build
+===============================================================================
+
+To build and install PKA tests:
+
+        # cd <pka_tests_dir>
+        # make
+        # make install
+
+Test applications should be installed into '<pka_install_dir>/bin'.
+
+
+===============================================================================
+Validation tests
+===============================================================================
+
+Example of usage:
+
+    # ./pka_test_validation -c 8 -r 4 -s 1
+
+
+  syntax: pka_test_validation [--help|-h] [--mode|-m MODE]
+                            [--sync|-s SYNC] --cpu NUM --ring NUM
+
+  Mandatory parameters:
+    -c, --cpu  NUM  CPU count.
+    -r, --ring NUM  Ring count.
+
+  Optional parameters:
+    -m, --mode MODE    Application mode
+                          0: single process mode (default)
+                          1: multi process mode
+    -s, --sync SYNC    Synchronization mode for multithread operations
+                          0: none of operations are lock-free
+                          1: all operations are lock-free (default)
+    -h, --help         Display help and exit.
+
+
+===============================================================================
+Power usage tests
+===============================================================================
+
+Example of usage:
+
+    # ./pka_test_power -r 16 -t 10 -k 4
+
+
+  syntax: pka_test_power [--help|-h] [--time|-t SECONDS]
+                       [--key|-k SIZE] --ring NUM
+
+  Mandatory parameters:
+    -r, --ring NUM     Ring count.
+
+  Optional parameters:
+    -t, --time SECONDS Number of seconds to run.
+    -k, --key  SIZE    Key size in Kbits:
+                          0: RSA 2048 bits (default)
+                          1: RSA 4096 bits
+    -h, --help         Display help and exit.
+
+===============================================================================
+Performance tests
+===============================================================================
+
+Example of usage:
+
+    # ./pka_test_perforamce -c MOD_EXP -e little -k 1 -m 100 -n 4 -q 10 \
+    > -t 1 -o 1 -v 0 -y no
+
+  syntax: pka_test_perforamce OPTIONS
+
+  Where OPTIONS can be:
+
+      -b <bit_len>         primary bit_len to use
+      -e ( big | little )  endianness of the interface
+      -h                   print this message and exit
+      -k <num_keys>        num of different key subsystems to make
+      -m <runs_per_test>   num of runs of each test per thread
+      -n <num_tests>       num of tests (per key subsystem) to make
+      -q <cmds_outstanding>number of cmds each thread keeps in play
+      -r                   report the per thread stats/results
+      -s <second_bit_len>  secondary bit_len for some cryptosystems
+      -t <num_threads>     number of threads/tiles to use
+      -o <num_rings>       number of PKA rings to use
+      -v <verbosity>       verbosity level - in range 0-3
+      -y ( yes | no )      check_results if set to yes
+      -c <test_kind>       name of the test kind.  One of:
+         ADD, SUBTRACT, MULTIPLY, DIVIDE, DIV_MOD, MODULO
+         SHIFT_LEFT, SHIFT_RIGHT, MOD_INVERT
+         MOD_EXP, RSA_MOD_EXP, RSA_VERIFY, RSA_MOD_EXP_WITH_CRT
+         ECC_ADD, ECC_DOUBLE, ECC_MULTIPLY
+         ECDSA_GEN, ECDSA_VERIFY, ECDSA_GEN_VERIFY
+         DSA_GEN, DSA_VERIFY, DSA_GEN_VERIFY
+
+    The default command line options (except for -b and -s) are:
+    '-c MOD_EXP -e little -k 1 -m 100 -n 4 -q 10 -t 1 -o 1 -v 0 -y no'
+    The defaults for '-b' and '-s' depend upon the test name (as
+    given by '-c') as follows:
+    a) the default for '-b' is 1024 for all tests except
+       for the ECC_* tests and ECDSA_* tests when it is 256.
+    b) the default for -s is 33 for RSA_VERIFY, 'bit_len - 1'
+       for DIVIDE, DIV_MOD, MODULO, and DSA_* tests, 'bit_len / 2'
+       for the ECDSA_* tests and unused for for all other tests.

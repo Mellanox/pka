@@ -1,0 +1,178 @@
+Copyright (c) 2016-2018, Mellanox Technologies
+All rights reserved.
+
+License: BSD
+
+BlueField PKA API 1.0
+Mellanox BlueField Public Key Acceleration (PKA) Package
+
+Author, Khalil Blaiech <kblaiech@mellanox.com>
+
+
+===============================================================================
+Overview
+===============================================================================
+
+This directory hierarchy holds the Mellanox BlueField PKA software.
+It contains the documentation, sources, and tests needed to use the
+BlueField PKA hardware. It offers a custom API required to code
+PKA-based applications.
+
+The PKA software package consists of (1) an API specification, which
+is the application writer's view (this is also intended to provide
+complete interfaces to use with OpenSSL), (2) an API implementation
+for BlueField, (3) validation test suite, an independant set of
+test routines that run against the API implementation and verifies
+that it correctly implements all of the defined APIs at a functional
+level, and (4) a dynamic OpenSSL engine component to support RSA
+operations and interfaces with the BlueField PKA hardware.
+
+
+===============================================================================
+Important notes
+===============================================================================
+
+* The BlueField PKA software is intended for BlueField products that
+  support the crypto-enabled feature (High Bin/Crypto BlueField chip).
+
+    To verify whether the Bluefield chip has crypto capabilities,
+    contact Mellanox or check the CPU flags; 'aes', 'sha1', and
+    'sha2' must be present.
+
+        # lscpu
+        ...
+        Flags: fp asimd evtstrm aes pmull sha1 sha2 crc32 cpuid
+
+* BlueField boot loader MUST enable SMMU support (bf-smmu) in order to
+  benefit of the full hardware and software capabilities (e.g.: Public
+  Key operations, and TRNG support); the SMMU support might be set in
+  UEFI menu through system configuration options.
+  This feature is supported UEFI version 0.99-f0e004e (BlueField release
+  >= 1.0.beta1.10517). Earlier versions requires a special UEFI build.
+
+    From UEFI menu:
+
+         Select 'Device Manager', and enter 'System Configuration'
+         screen to enable SMMU; Simply check 'Enable SMMU' option.
+
+    To verify whether the SMMU support is enabled:
+
+        On Yocto Poky systems:
+        # /opt/mlnx/scripts/bfver
+        ...
+        BlueField UEFI version: 0.99-f0e004e
+        ...
+        Boot ACPI: bf-smmu
+        ...
+
+* The BlueField PKA software requires the MLXBF PKA kernel module
+  to be installed; the kernel module is referred to as 'pka-mlxbf';
+  it should be provided as part of the BlueField Sotware Distrbution.
+
+    To verify whether the MLXBF PKA driver is installed:
+
+        On Yocto Poky systems:
+        # lsmod | grep -i pka
+        pka_mlxbf              53248  0
+
+        On CentOS/Ubuntu systems:
+        # lsmod | grep -i pka
+        pka_mlxbf             262144  0
+        vfio                  262144  2 vfio_iommu_type1,pka_mlxbf
+
+    To install the MLXBF PKA driver:
+
+        On Yocto Poky systems:
+        # modprobe pka-mlxbf
+
+        On CentOS systems, install the driver source RPM; Download the
+        SRPM from /mswg/release/sw_mc_soc/BlueField-1.0.beta1.10513/SRPMS.
+
+        # rpmbuild --rebuild pka-mlxbf-1.0-0.g5bd5b80.src.rpm
+        # cd ~/rpmbuild/RPMS/aarch64/
+        # rpm -ivh pka-mlxbf-1.0-0.g5bd5b80_4.11.0_22.el7a.aarch64.rpm
+        # modprobe pka-mlxbf
+
+
+===============================================================================
+Basic directory structure
+===============================================================================
+
+The directory is structured as follow:
+
+documentation/
+  Documentation related to the BlueField PKA hardware and software
+  specification. It also provides details about the architecture,
+  the design and the implementation of the API. It covers most of
+  the API concepts in case customers wish to use it directly.
+
+src/
+  Various sources and header files for the PKA library as well as a
+  userspace API to allow programmers to code their own applications.
+
+    doc/
+      Configuration file for doxygen documentation.
+
+    engine/
+      Source file of the OpenSSL engine and its associated helper
+      files to integrate with the BlueField PKA library.
+
+    include/
+      Various helpers and header files used by the library sources
+      as well as the BlueField PK driver module.
+
+    lib/
+      Complete sources and header files, including the userspace API
+      (i.e., pka.h) as well as the library implementation.  Sources
+      are built as a shared library which might be used by userspace
+      applications.
+
+    samples/
+      This directory has a sample application that presents a basic
+      example of a userspace application.
+
+    tests/
+      Test suite to provide a comprehensive set of API validation
+      tests that are intended to be used to verify whether the
+      implementation meets the design requirements. It also includes
+      additional tests which might be used for power tests.
+
+tests/
+  Includes the Makefile used to verify the BlueField PKA software;
+  it mainly consists of regression tests to maintain the software
+  development process.
+
+
+===============================================================================
+Naming convention
+===============================================================================
+
+Source files and header files are named: pka_*, the suffix identifies
+the file. Test files are named: pka_test_*, the suffix identifies the
+test. C functions for the library files must be called pka_<lib>_*,
+where the possible suffix can refer to either objects and actions. For
+instance, if a function belongs to 'pka_dev.c', it should be called
+'pka_dev_<action>_<object>()'.
+
+
+===============================================================================
+How to build
+===============================================================================
+
+Look in 'src/README' for the list of build dependencies and for more
+detail on how to build.
+
+Directory 'src/tests' contains test applications for BlueField PKA API
+calls and features support.
+
+In general you can build, from the source directory 'src':
+
+    ./autogen.sh
+    ./configure
+
+Use 'make' to build PKA library and PKA API documentation; 'make install'
+will copy all required binary files to the install directory.
+
+Note that verifications tests and OpenSSL engine are built separately,
+if needed. Use 'make' and 'make install' to build and install the tests
+executables and the dynamically-loadable engine module.

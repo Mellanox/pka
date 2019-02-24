@@ -1,0 +1,179 @@
+Copyright (c) 2016-2018, Mellanox Technologies
+All rights reserved.
+
+BlueField PKA engine 1.0
+
+Author, Khalil Blaiech <kblaiech@mellanox.com>
+
+
+===============================================================================
+Overview
+===============================================================================
+
+The BlueField PKA engine is a set dynamically-loadable OpenSSL engine that
+interfaces with the BlueField PKA hardware. It provides support for RSA
+operation such as signature generation and verification.
+
+The BlueField PKA engine might be integrated with OpenSSL 1.0 and 1.1.
+Earlier versions may or may not work; use at your own risk!
+
+
+===============================================================================
+Important Notes
+===============================================================================
+
+  * The PKA engine requires the PKA libraries and drivers installed.
+    Look at 'README' to build and install PKA libraries. Note that
+    the PKA engine is pre-installed:
+
+        On Yocto Poky systems, the engine is installed into
+        '/usr/lib64/engines/libbfengine.so'
+
+        On CentOS systems, the engine is installed into
+        '/usr/lib64/libbfengine.so.1.0.0'
+
+        On Ubuntu systems, the engine is installed into
+        '/usr/lib/aarch64-linux-gnu/libbfengine.so.1.0.0'
+
+    Users are invited to install the shared object file into the
+    appropriate destination directory within the OpenSSL engine folder,
+    if needed. This depends on OpennSSL installation and settings.
+
+  * The PKA engine requires OpenSSL libraries, such as libcrypto and
+    libssl. Note that Yocto Poky, CentOS and Ubuntu systems have a pre-
+    installed openssl package:
+
+        On Yocto Poky systems:
+        # openssl version
+        OpenSSL 1.0.2m  2 Nov 2017
+
+        On CentOS systems:
+        # openssl version
+        OpenSSL 1.0.2k-fips  26 Jan 2017
+
+        On Ubuntu systems:
+        # openssl version
+        OpenSSL 1.1.0g  2 Nov 2017
+
+    For native compilation, simply load the necessary libraries using
+    the appropriate tool set.
+
+        On CentOS systems:
+        # yum install openssl-devel
+
+        On Ubuntu systems:
+        # apt install openssl-devel
+
+    Cross compilation requires cross compiling the individual libraries.
+    In order for a cross compiled executable to run on a target system,
+    one must build the same version as that which is installed on the
+    target rootfs.
+
+
+===============================================================================
+How to build
+===============================================================================
+
+  Build BlueField PKA engine module:
+
+        # cd <pka_engine_dir>
+        # make
+        # make install
+
+===============================================================================
+How to install
+===============================================================================
+
+  The PKA engine module has to be installed within the engines folder
+  of the installed OpenSSL. This may vary depending on OpenSSL installation
+  as well as the Linux distribution.
+
+  Note that both Yocto Poky and CentOS have already the engine module
+  installed within the correct directory.
+
+        On Yocto Poky, the engine module is installed into
+        '/usr/lib64/engines/libpka.so'
+
+        On CentOS, the engine module is installed into
+        '/usr/lib64/openssl/engines/libpka.so'
+
+  If needed, install the engine module to OpenSSL 'engines' directory.
+
+        On Yocto Poky systems running default OpenSSL 1.0.2m:
+        # cd <pka_install_dir>/lib
+        # cp libbfengine.so.1.0.0 /usr/lib64/engines/
+        # cd /usr/lib64/engines/
+        # ln -s libbfengine.so.1.0.0 libpka.so
+
+        On CentOS systems running default OpenSSL 1.0.2k-fips:
+        # cd <pka_install_dir>/lib
+        # cp libbfengine.so.1.0.0 /usr/lib64/openssl/engines/
+        # cd /usr/lib64/openssl/engines/
+        # ln -s libbfengine.so.1.0.0 libpka.so
+
+        On Ubuntu systems running default OpenSSL 1.1.0g:
+        # cd <pka_install_dir>/lib
+        # cp libbfengine.so.1.0.0 /usr/lib/aarch64-linux-gnu/engines-1.1/
+        # cd /usr/lib/aarch64-linux-gnu/engines-1.1/
+        # ln -s libbfengine.so.1.0.0 pka.so
+
+  Note that OpenSSL 1.0 requires the prefix 'lib' to be appended to
+  the ID of the PKA engine, i.e. 'libpka.so'. OpenSSL 1.1 the module
+  name should be 'pka.so'; as same as the ID of the engine.
+
+  Please refer to Section "Important Notes" in order to locate the pre-built
+  engine module, in case the module didn't get built manually.
+
+===============================================================================
+How to load
+===============================================================================
+
+  To load the BlueField PKA engine module into OpenSSL:
+
+    On Yocto Poky systems:
+    # openssl engine -t dynamic \
+    > -pre SO_PATH:/usr/lib64/engines/libpka.so \
+    > -pre ID:pka -pre LOAD
+    (dynamic) Dynamic engine loading support
+    [Success]: SO_PATH:/usr/lib64/engines/libpka.so
+    [Success]: ID:pka
+    [Success]: LOAD
+    Loaded: (pka) BlueField PKA engine support
+         [ available ]
+
+    On CentOS systems:
+    # openssl engine -t dynamic \
+    > -pre SO_PATH:/usr/lib64/openssl/engines/libpka.so \
+    > -pre ID:pka -pre LOAD
+    (dynamic) Dynamic engine loading support
+    [Success]: SO_PATH:/usr/lib64/openssl/engines/libpka.so
+    [Success]: ID:pka
+    [Success]: LOAD
+    Loaded: (pka) BlueField PKA engine support
+         [ available ]
+
+    On Ubuntu systems:
+    # openssl engine dynamic \
+    > -pre SO_PATH:/usr/lib/aarch64-linux-gnu/engines-1.1/pka.so \
+    > -pre ID:pka -pre LOAD
+    (dynamic) Dynamic engine loading support
+    [Success]: SO_PATH:/usr/lib/aarch64-linux-gnu/engines-1.1/pka.so
+    [Success]: ID:pka
+    [Success]: LOAD
+    Loaded: (pka) BlueField PKA engine support
+         [ available ]
+
+  Note that the option '-t' is omitted when working with OpenSSL 1.1,
+  since this cannot be used with option 'engine'.
+
+  Now, the BlueField PKA engine is ready to use; no need to reload the
+  engine across reboot.
+
+  To use the BlueField PKA engine, one may pass the option '-engine pka'
+  to dynamically load the module and enable hardware acceleration.
+
+  For example:
+
+    # openssl speed -engine pka rsa512
+    engine "pka" set.
+    ...

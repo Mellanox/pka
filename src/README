@@ -1,0 +1,142 @@
+Copyright (c) 2016-2018, Mellanox Technologies
+All rights reserved.
+
+License: BSD
+
+BlueField PKA API 1.0
+
+Author, Khalil Blaiech <kblaiech@mellanox.com>
+
+
+===============================================================================
+Overview
+===============================================================================
+
+The Mellanox BlueField PKA software is a set of libraries and tests
+intended to be used with the BlueField PKA hardware.
+
+The Mellanox BlueField PKA software offers a custom API required to
+code PKA-based applications.
+
+
+===============================================================================
+Dependancies
+===============================================================================
+
+Building PK library, documentation and tests requires the following:
+
+  1. Linux Kernel >= 4.11.0
+
+    Mellanox BlueField products supports the following Linux distributions:
+
+    * BlueField Yocto Poky (4.14.53 aarch64)
+    * CentOS 7 (4.11.0-22.el7a.aarch64)
+    * Ubuntu 18.04 (4.18.0-1000-mellanox aarch64)
+
+    The kernel configuration should enable VFIO support and its dependencies,
+    and hardware random number generator support.
+
+  2. Autotools
+
+    automake
+    autoconf
+    libtool
+
+    On CentOS systems:
+    # sudo yum install automake autoconf libtool
+
+    On Ubuntu systems:
+    # sudo apt install automake autoconf libtool
+
+  3. Required packages
+
+    Libraries currently required to link: openssl
+
+    OpenSSL is needed to build the dynamically-loadable BlueField PKA
+    engine. Note that OpenSSL 1.0 and 1.1 are both supported. Earlier
+    versions may or may not work.
+
+  4. Doxygen documentation
+
+    The API documentation is generated via doxygen. The trusted version
+    of doxygen is 1.8.5. Only HTML documentation is built.
+
+
+===============================================================================
+Important Notes
+===============================================================================
+
+  * The PKA libraries and drivers should be already installed witin the
+    given Linux distribution;
+
+        On poky and CentOS, the PKA library is installed into
+        '/usr/lib64/libPKA.so'
+
+        On Ubuntu, the PKA library is installed into
+        '/usr/lib/aarch64-linux-gnu/libPKA.so'
+
+===============================================================================
+How to build
+===============================================================================
+
+  1. Build PKA software and documentation:
+
+        # cd <pka_src_dir>
+        # ./autogen.sh
+        # ./configure
+        # make
+        # make install
+
+  2. Cross compile of PKA software:
+
+    To cross compile the PKA library and documentation, the Yocto-produced
+    SDK might be installed:
+
+        $ /mswg/release/sw_mc_soc/BlueField-1.0.<release>.<version>/poky-glibc-x86_64-core-image-full-sdk-aarch64-toolchain-BlueField-1.0.<release>.<version>.2.4.1.sh
+        Poky (Yocto Project Reference Distro) SDK installer version 2.4.1
+        =================================================================
+        Enter target directory for SDK (default: /opt/poky/2.4.1): /labhome/kblaiech/workspace/poky/2.4.1
+        You are about to install the SDK to "/labhome/kblaiech/workspace/poky/2.4.1". Proceed[Y/n]?
+         Y
+        Extracting SDK.............................................................
+        ...........................................................................
+        ...........................................................................
+        ........................................................done
+        Setting it up...done
+        SDK has been successfully set up and is ready to be used.
+        Each time you wish to use the SDK in a new shell session, you need to source the environment setup script e.g.
+         $ . /labhome/kblaiech/workspace/poky/2.4.1/environment-setup-aarch64-poky-linux
+
+    To use the SDK cross-compilation tools, you should 'source' the top-level
+    "environment-setup-aarch64-poky-linux" script to set various environment
+    variables, including $PATH, $CC, $CROSS_COMPILE, etc.
+
+        $ source <sdk_install_dir>/poky/2.4.1/environment-setup-aarch64-poky-linux
+
+    To build the PKA software:
+
+        $ cd <pka_src_dir>
+        $ ./autogen.sh
+        $ ./configure --host=aarch64-poky-linux --prefix=<pka_install_dir>
+        $ make
+        $ make install
+
+  3. Build PKA tests
+
+    Look in 'README.tests' for further detail on how to build, install
+    and run the tests suite.
+
+    By default, tests suite support is enabled, run 'configure' script
+    with option '--disable-tests' to disable it:
+
+        # ./configure --disable-tests
+
+  4. Build PKA engine
+
+    Look in 'README.engine' for further detail on how to build, install,
+    load and run OpenSSL applications with BlueField PKA engine.
+
+    By default, engine support is enabled, run 'configure' script with
+    option '--disable-engine' to disable it:
+
+        # ./configure --disable-engine
