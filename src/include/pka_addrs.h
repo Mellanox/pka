@@ -41,10 +41,6 @@
 #define MEM_SIZE_32KB       0x8000
 #define MEM_SIZE_64KB       0x10000
 
-// Define Crypto base addresses
-#define CRYPTO_0_BASE       0x40000000
-#define CRYPTO_1_BASE       0x48000000
-
 //
 // COMMON SPACE
 //
@@ -65,17 +61,6 @@
 //
 // CRYPTO SPACE
 //
-#define CRYPTO_PKA_0_BASE   0x5000000
-#define CRYPTO_PKA_1_BASE   0x7000000
-
-// PKA IO Block base address. Refer to device routing
-// tables file in System Address Map (SAM) data file.
-#define PKA_IO_BLOCK_0_BASE     (CRYPTO_PKA_0_BASE | CRYPTO_0_BASE)
-#define PKA_IO_BLOCK_1_BASE     (CRYPTO_PKA_1_BASE | CRYPTO_0_BASE)
-#define PKA_IO_BLOCK_2_BASE     (CRYPTO_PKA_0_BASE | CRYPTO_1_BASE)
-#define PKA_IO_BLOCK_3_BASE     (CRYPTO_PKA_1_BASE | CRYPTO_1_BASE)
-
-#define PKA_IO_BLOCK_SIZE       0x1000000   // PKA IO Block size 16M Bytes.
 
 // All addresses/offsets herein are BYTE addresses.
 
@@ -277,7 +262,7 @@
 #define PKA_WINDOW_RAM_REGION_3_SIZE    PKA_WINDOW_RAM_REGION_SIZE
 
 // Currently, we do not use these MiCA specific CSRs.
-#define PKI_EXT_CSR_START_ADDR          0x520000
+#define PKI_EXT_CSR_START_ADDR          0x510000
 
 // The PKI (not EIP154) CSR address/offsets: These are all addressed as
 // 8-byte registers.

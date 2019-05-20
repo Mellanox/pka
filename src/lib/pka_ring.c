@@ -1301,7 +1301,6 @@ uint32_t pka_ring_results_len(pka_ring_hw_rslt_desc_t *result_desc,
     case CC_DIVIDE:
         // Returns two results. Note that the remainder length's are returned
         // in different fields.
-        *result2_len = rslt_byte_len;
 
         // Note the "31" added to the result_bit_len (when the result is not
         // zero).  This is because there is no modulo_msb_offset (i.e. bit
@@ -1313,6 +1312,13 @@ uint32_t pka_ring_results_len(pka_ring_hw_rslt_desc_t *result_desc,
             rslt_bit_len = (result_desc->modulo_msw_offset * 32) + 31;
 
         *result1_len = (rslt_bit_len + 7) / 8;
+
+        if (result_desc->result_is_0 != 0)
+            rslt_bit_len = 0;
+        else
+            rslt_bit_len = (result_desc->main_result_msw_offset * 32) + 31;
+
+        *result2_len = (rslt_bit_len + 7) / 8;
 
         return 2;
 

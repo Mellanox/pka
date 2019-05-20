@@ -44,6 +44,7 @@
 
 #ifdef __KERNEL__
 #include <linux/types.h>
+#include "pka_firmware.h"
 #else
 #include <stdlib.h>
 #include <stdint.h>
@@ -70,6 +71,10 @@
 #define PKA_DEV_RING_DT_PREFIX_1        "47000000.eip154:ring@%d"
 #define PKA_DEV_RING_DT_PREFIX_2        "4d000000.eip154:ring@%d"
 #define PKA_DEV_RING_DT_PREFIX_3        "4f000000.eip154:ring@%d"
+#define PKA_DEV_RING_DT_PREFIX_4        "44000000.eip154:ring@%d"
+#define PKA_DEV_RING_DT_PREFIX_5        "46000000.eip154:ring@%d"
+#define PKA_DEV_RING_DT_PREFIX_6        "4c000000.eip154:ring@%d"
+#define PKA_DEV_RING_DT_PREFIX_7        "4e000000.eip154:ring@%d"
 
 #define PKA_DEV_RING_ACPI_PREFIX        "MLNXBF11:%02x"
 
@@ -140,9 +145,10 @@ typedef struct
     pka_dev_res_t    master_seq_ctrl;   // master sequencer controller CSR
     pka_dev_res_t    aic_csr;           // interrupt controller CSRs
     pka_dev_res_t    trng_csr;          // TRNG module CSRs
+    pka_dev_res_t    ext_csr;           // MiCA specific CSRs (glue logic)
 } pka_dev_shim_res_t;
 
-#define PKA_DEV_SHIM_RES_CNT         5  // Number of PKA device resources
+#define PKA_DEV_SHIM_RES_CNT         6  // Number of PKA device resources
 
 /// Platform global shim resource information
 typedef struct
@@ -257,7 +263,7 @@ int pka_dev_unregister_ring(pka_dev_ring_t *ring);
 /// Register PKA IO block. This function initializes a shim and configures its
 /// related resources, and returns a pointer to that ring.
 pka_dev_shim_t *pka_dev_register_shim(uint32_t shim_id, uint64_t shim_base,
-                           uint64_t shim_size);
+                           uint64_t shim_size, uint8_t shim_fw_id);
 
 /// Unregister PKA IO block
 int pka_dev_unregister_shim(pka_dev_shim_t *shim);

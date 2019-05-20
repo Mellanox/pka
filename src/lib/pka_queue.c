@@ -687,19 +687,25 @@ int pka_queue_rslt_enqueue(pka_queue_t             *queue,
     {
     case 2:
         rslt2_ptr             = (pka_operand_t *) (queue->mem + result2_offset);
+        memset(rslt2_ptr, 0, sizeof(pka_operand_t));
+        rslt2_ptr->big_endian = PKA_RING_BYTE_ORDER;
         rslt2_ptr->actual_len = rslt_desc->result2_len;
         rslt2_ptr->buf_len    = rslt_desc->result2_len;
         result2_offset       += sizeof(pka_operand_t);
         result2_offset       &= queue_mask;
-        rslt2_ptr->buf_ptr    = (uint8_t *) (queue->mem + result2_offset);
+        if (rslt2_ptr->actual_len)
+            rslt2_ptr->buf_ptr    = (uint8_t *) (queue->mem + result2_offset);
         // fall-through
     case 1:
         rslt1_ptr             = (pka_operand_t *) (queue->mem + result1_offset);
+        memset(rslt1_ptr, 0, sizeof(pka_operand_t));
+        rslt1_ptr->big_endian = PKA_RING_BYTE_ORDER;
         rslt1_ptr->actual_len = rslt_desc->result1_len;
         rslt1_ptr->buf_len    = rslt_desc->result1_len;
         result1_offset       += sizeof(pka_operand_t);
         result1_offset       &= queue_mask;
-        rslt1_ptr->buf_ptr    = (uint8_t *) (queue->mem + result1_offset);
+        if (rslt1_ptr->actual_len)
+            rslt1_ptr->buf_ptr    = (uint8_t *) (queue->mem + result1_offset);
     }
 
     // Write the result operands information and data.

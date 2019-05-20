@@ -37,8 +37,6 @@
 #include <linux/ioport.h>
 #include <linux/timex.h>
 #include <linux/vfio.h>
-
-#include "pka_firmware.h"
 #else
 #include <stdint.h>
 #include <string.h>
@@ -720,6 +718,20 @@ static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
         return ret;
     }
 
+    // Set PKA device 'glue' logic registers
+    reg_size = PAGE_SIZE;
+    reg_base = pka_dev_get_register_base(shim->base,
+                                            PKA_INT_MASK_ADDR);
+    ret = pka_dev_set_resource_config(shim, &shim->resources.ext_csr,
+                                      reg_base, reg_size,
+                                      PKA_DEV_RES_TYPE_REG,
+                                      "PKA_EXT_CSR");
+    if (ret)
+    {
+        PKA_ERROR(PKA_DEV, "unable to setup the MiCA specific registers\n");
+        return ret;
+    }
+
     shim->status = PKA_SHIM_STATUS_CREATED;
 
     return ret;
@@ -820,33 +832,36 @@ static int pka_dev_load_image(pka_dev_res_t *res_ptr, const uint32_t *data_buf,
 {
     uint64_t data_rd;
     int      mismatches;
-    int      i, ret = 0;
+    int      i, j, ret = 0;
 
     if (res_ptr->status != PKA_DEV_RES_STATUS_MAPPED ||
             res_ptr->type != PKA_DEV_RES_TYPE_MEM)
         return -EPERM;
 
-    if (res_ptr->size < size)
+    // Note that the image size is in word of 4 bytes and memory 'writes'
+    // are 8 bytes aligned, thus the memory start address and end address
+    // are shifted.
+    if (res_ptr->size < (size * BYTES_PER_WORD) << 1)
     {
         PKA_ERROR(PKA_DEV, "image size greater than memory size\n");
         return -EINVAL;
     }
 
-    for (i = 0; i < size; i++)
-        pka_dev_io_write(res_ptr->ioaddr, i * BYTES_PER_DOUBLE_WORD,
+    for (i = 0, j = 0; i < size; i++, j += BYTES_PER_DOUBLE_WORD)
+        pka_dev_io_write(res_ptr->ioaddr, j,
                             (uint64_t) data_buf[i]);
 
     mismatches = 0;
-    PKA_DEBUG(PKA_DEV, "PKA DEV: verifying image (%u bytes)\n", size);
-    for (i = 0; i < size; i++)
+    PKA_DEBUG(PKA_DEV, "PKA DEV: verifying image (%u words)\n", size);
+    for (i = 0, j = 0; i < size; i++, j += BYTES_PER_DOUBLE_WORD)
     {
-        data_rd = pka_dev_io_read(res_ptr->ioaddr, i * BYTES_PER_DOUBLE_WORD);
+        data_rd = pka_dev_io_read(res_ptr->ioaddr, j);
         if (data_rd != (uint64_t) data_buf[i])
         {
             mismatches += 1;
             PKA_DEBUG(PKA_DEV, "error while loading image: "
                     "addr:0x%llx expected data: 0x%x actual data: 0x%llx\n",
-                    res_ptr->base + i * BYTES_PER_DOUBLE_WORD,
+                    res_ptr->base + j,
                     data_buf[i], data_rd);
         }
     }
@@ -865,24 +880,21 @@ static int
 pka_dev_config_master_seq_controller(pka_dev_shim_t *shim,
                                      pka_dev_res_t *master_seq_ctrl_ptr)
 {
-    pka_dev_res_t *master_prog_ram;
-    pka_dev_res_t *aic_csr_ptr;
-    void          *aic_reg_ptr;
-    void          *master_reg_ptr;
+    pka_dev_res_t  *aic_csr_ptr, *master_prog_ram;
+    void           *aic_reg_ptr, *master_reg_ptr;
 
-    uint64_t       aic_reg_base;
-    uint64_t       aic_reg_off;
-    uint64_t       master_reg_base;
-    uint64_t       master_reg_off;
+    uint64_t        aic_reg_base, aic_reg_off;
+    uint64_t        master_reg_base, master_reg_off;
 
-    uint32_t       boot_image_size;
-    uint32_t       master_image_size;
+    const uint32_t *boot_img_ptr, *master_img_ptr;
+    uint32_t        boot_img_size, master_img_size;
 
-    uint32_t       pka_master_irq;
+    uint32_t        pka_master_irq;
 
-    uint64_t       timer;
-    uint8_t        status_bits;
-    int            ret = 0;
+    uint64_t        timer;
+    uint8_t         status_bits;
+    uint8_t         shim_fw_id;
+    int             ret = 0;
 
     if (master_seq_ctrl_ptr->status != PKA_DEV_RES_STATUS_MAPPED ||
             master_seq_ctrl_ptr->type != PKA_DEV_RES_TYPE_REG)
@@ -897,12 +909,15 @@ pka_dev_config_master_seq_controller(pka_dev_shim_t *shim,
     pka_dev_io_write(master_reg_ptr, master_reg_off,
                             PKA_MASTER_SEQ_CTRL_RESET_VAL);
 
-    // Load boot image into PKA_MASTER_PROG_RAM
-    boot_image_size = sizeof(boot_image_data_buf) / sizeof(uint32_t);
-    PKA_DEBUG(PKA_DEV, "loading boot image (%d bytes)\n", boot_image_size);
+    shim_fw_id = pka_firmware_get_id();
 
+    // Load boot image into PKA_MASTER_PROG_RAM
+    boot_img_size = pka_firmware_array[shim_fw_id].boot_img_size;
+    PKA_DEBUG(PKA_DEV, "loading boot image (%d words)\n", boot_img_size);
+
+    boot_img_ptr = pka_firmware_array[shim_fw_id].boot_img;
     ret = pka_dev_load_image(&shim->resources.master_prog_ram,
-                                boot_image_data_buf, boot_image_size);
+                                boot_img_ptr, boot_img_size);
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to load boot image\n");
@@ -963,12 +978,13 @@ pka_dev_config_master_seq_controller(pka_dev_shim_t *shim,
                         PKA_MASTER_SEQ_CTRL_RESET_VAL);
 
     // Load Master image into PKA_MASTER_PROG_RAM
-    master_image_size = sizeof(master_image_data_buf) / sizeof(uint32_t);
-    PKA_DEBUG(PKA_DEV, "loading master image (%d bytes)\n",
-                master_image_size);
+    master_img_size = pka_firmware_array[shim_fw_id].master_img_size;
+    PKA_DEBUG(PKA_DEV, "loading master image (%d words)\n",
+                master_img_size);
     master_prog_ram = &shim->resources.master_prog_ram;
-    ret = pka_dev_load_image(master_prog_ram, master_image_data_buf,
-                                master_image_size);
+    master_img_ptr = pka_firmware_array[shim_fw_id].master_img;
+    ret = pka_dev_load_image(master_prog_ram, master_img_ptr,
+                                master_img_size);
     if (ret)
     {
         pr_err("PKA DEV: failed to load master image\n");
@@ -1140,6 +1156,45 @@ static int pka_dev_config_trng(pka_dev_res_t *aic_csr_ptr,
     return ret;
 }
 
+// Triggers hardaware zeorize to initialize PKA internal memories
+static int pka_dev_ram_zeroize(pka_dev_res_t *ext_csr_ptr)
+{
+    uint64_t  csr_reg_base, csr_reg_off, csr_reg_value;
+    uint64_t  timer;
+    void     *csr_reg_ptr;
+
+    if (ext_csr_ptr->status != PKA_DEV_RES_STATUS_MAPPED ||
+            ext_csr_ptr->type != PKA_DEV_RES_TYPE_REG)
+        return -EPERM;
+
+    PKA_DEBUG(PKA_DEV, "Starting memory zeroize\n");
+
+    csr_reg_base = ext_csr_ptr->base;
+    csr_reg_ptr  = ext_csr_ptr->ioaddr;
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                                              PKA_ZEROIZE_ADDR);
+    // When PKA_ZEROIZE register is written (with any value)
+    // sensitive data in the PKA is zeroed out.
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, 1);
+
+    // Now wait until the zeroize completes
+    timer = pka_dev_timer_start(10000000); // 10000 ms
+    csr_reg_value = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+    while (csr_reg_value != 0)
+    {
+        csr_reg_value = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+
+        if (pka_dev_timer_done(timer))
+        {
+            PKA_DEBUG(PKA_DEV, "Timeout while PKA zeorize\n");
+            return -EBUSY;
+        }
+    }
+
+    return 0;
+}
+
 // Initialize PKA IO block refered to as shim. It configures shim's
 // parameters and prepare resources by mapping corresponding memory.
 // The function also configures shim registers and load firmware to
@@ -1147,14 +1202,25 @@ static int pka_dev_config_trng(pka_dev_res_t *aic_csr_ptr,
 // output. It returns 0 on success, a negative error code on failure.
 static int pka_dev_init_shim(pka_dev_shim_t *shim)
 {
-    uint32_t farm_image_size;
+    const uint32_t *farm_img_ptr;
+    uint32_t        farm_img_size;
+    uint8_t         shim_fw_id;
 
-    int      ret = 0;
+    int ret = 0;
 
     if (shim->status != PKA_SHIM_STATUS_CREATED)
     {
         PKA_ERROR(PKA_DEV, "PKA device must be created\n");
         return -EPERM;
+    }
+
+    // First of all, trigger a hardware zeroize to initialize internal
+    // RAM memories
+    ret = pka_dev_ram_zeroize(&shim->resources.ext_csr);
+    if (ret)
+    {
+        PKA_ERROR(PKA_DEV, "failed to zeroize PKA\n");
+        return ret;
     }
 
     // Configure AIC registers
@@ -1165,13 +1231,21 @@ static int pka_dev_init_shim(pka_dev_shim_t *shim)
         return ret;
     }
 
+    shim_fw_id = pka_firmware_get_id();
+
     // Load Farm image into PKA_BUFFER_RAM for non-High Assurance mode
     // or into PKA_SECURE_RAM for High Assurance mode.
-    farm_image_size = sizeof(farm_image_data_buf) / sizeof(uint32_t);
-    PKA_DEBUG(PKA_DEV, "loading farm image (%d bytes)\n", farm_image_size);
+    farm_img_size = pka_firmware_array[shim_fw_id].farm_img_size;
+    PKA_DEBUG(PKA_DEV, "loading farm image (%d words)\n", farm_img_size);
 
-    ret = pka_dev_load_image(&shim->resources.buffer_ram,
-                                farm_image_data_buf, farm_image_size);
+    farm_img_ptr = pka_firmware_array[shim_fw_id].farm_img;
+    // The IP provider suggests using the zeroize function to initialize
+    // the Buffer RAM. But a bug has been detected when writing ECC bits.
+    // Thus a workaround is used, and has already been shown to work; it
+    // consists of padding the farm image. Then all RAM locations will be
+    // written with correct ECC before the IP reads the image out.
+    ret = pka_dev_load_image(&shim->resources.buffer_ram, farm_img_ptr,
+                                farm_img_size);
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to load farm image\n");
@@ -1384,9 +1458,11 @@ static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
 }
 
 pka_dev_shim_t *pka_dev_register_shim(uint32_t shim_id, uint64_t shim_base,
-                           uint64_t shim_size)
+                           uint64_t shim_size, uint8_t shim_fw_id)
 {
     pka_dev_shim_t *shim;
+
+    pka_firmware_set_id(shim_fw_id);
 
     shim = __pka_dev_register_shim(shim_id, shim_base, shim_size);
     if (shim)
@@ -1605,7 +1681,7 @@ bool pka_dev_has_avail_ring(pka_ring_info_t *ring_info,
         }
         else
         {
-            ring_info->ring_id  = next_ring_id * PKA_MAX_NUM_IO_BLOCKS;
+            ring_info->ring_id  = next_ring_id * PKA_MAX_NUM_IO_BLOCK_RINGS;
             ring_info->ring_id %= PKA_MAX_NUM_RINGS - 1;
             next_ring_id       += 1;
         }
@@ -1613,7 +1689,7 @@ bool pka_dev_has_avail_ring(pka_ring_info_t *ring_info,
         // Open the ring corresponding to the given ring identifier.
         if (pka_dev_open_ring(ring_info))
         {
-            PKA_ERROR(PKA_DEV, "failed to open ring %d\n",
+            PKA_DEBUG(PKA_DEV, "failed to open ring %d\n",
                         ring_info->ring_id);
             pka_dev_close_ring(ring_info);
             errors += 1;
@@ -1702,6 +1778,14 @@ static char *pka_dev_get_ring_prefix(uint32_t ring_id, bool dt)
         return ((dt) ? PKA_DEV_RING_DT_PREFIX_2 : PKA_DEV_RING_ACPI_PREFIX);
     case 12 ... 15:
         return ((dt) ? PKA_DEV_RING_DT_PREFIX_3 : PKA_DEV_RING_ACPI_PREFIX);
+    case 16 ... 19:
+        return ((dt) ? PKA_DEV_RING_DT_PREFIX_4 : PKA_DEV_RING_ACPI_PREFIX);
+    case 20 ... 23:
+        return ((dt) ? PKA_DEV_RING_DT_PREFIX_5 : PKA_DEV_RING_ACPI_PREFIX);
+    case 24 ... 27:
+        return ((dt) ? PKA_DEV_RING_DT_PREFIX_6 : PKA_DEV_RING_ACPI_PREFIX);
+    case 28 ... 31:
+        return ((dt) ? PKA_DEV_RING_DT_PREFIX_7 : PKA_DEV_RING_ACPI_PREFIX);
 
     default:
         PKA_DEBUG(PKA_DEV,
@@ -1874,7 +1958,7 @@ int pka_dev_open_ring(pka_ring_info_t *ring_info)
         if (!pka_dev_get_group_no(PKA_SYSFS_RING_DEVICES, ring_name,
                                         &iommu_group_no))
         {
-            PKA_ERROR(PKA_DEV, "failed to get group number for ring %d\n",
+            PKA_DEBUG(PKA_DEV, "failed to get group number for ring %d\n",
                         ring_info->ring_id);
             return error;
         }
@@ -1885,7 +1969,7 @@ int pka_dev_open_ring(pka_ring_info_t *ring_info)
     ring_info->group = open(file, O_RDWR);
     if (ring_info->group < 0)
     {
-        PKA_ERROR(PKA_DEV,
+        PKA_DEBUG(PKA_DEV,
                   "cannot open the VFIO group for ring %d\n",
                     ring_info->ring_id);
         return error;
