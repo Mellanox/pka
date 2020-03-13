@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@ --sourcedirectory=src
+
+override_dh_auto_install:
+	dh_auto_install
+	mkdir -p debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/libpka1
+	mv debian/libpka1/usr/bin/* debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/libpka1/
+	rmdir debian/libpka1/usr/bin/
+	mkdir -p debian/libpka1/usr/share/doc/libpka1/
+	mv debian/libpka1/usr/share/doc/pka/* debian/libpka1/usr/share/doc/libpka1/
+	rmdir debian/libpka1/usr/share/doc/pka/
+	rm debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/*.la
