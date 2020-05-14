@@ -1,0 +1,14 @@
+Source: libpka
+Section: libs
+Priority: optional
+Maintainer: Mellanox Technologies <support@mellanox.com>
+Build-Depends: debhelper (>=11~), autotools-dev, pkg-config, libssl-dev
+Standards-Version: 4.1.4
+Homepage: https://github.com/Mellanox/pka
+
+Package: libpka1
+Architecture: arm64
+Multi-Arch: same
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Description: User-space library and openssl engine for
+ Mellanox PK acceleration.

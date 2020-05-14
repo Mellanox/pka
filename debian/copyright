@@ -1,0 +1,132 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: libpka
+Source: https://github.com/Mellanox/pka
+
+Files:     src/engine/helper/pka_helper.c
+           src/engine/helper/pka_helper.h
+           src/include/pka_addrs.h
+           src/include/pka_atomic.h
+           src/include/pka_barrier.h
+           src/include/pka_common.h
+           src/include/pka_config.h
+           src/include/pka_cpu.h
+           src/include/pka_debug.h
+           src/include/pka_firmware.h
+           src/include/pka_ioctl.h
+           src/include/pka_lock.S
+           src/include/pka_mmio.h
+           src/include/pka_types.h
+           src/include/pka_utils.h
+           src/lib/pka.c
+           src/lib/pka_dev.c
+           src/lib/pka_dev.h
+           src/lib/pka_internal.h
+           src/lib/pka_mem.c
+           src/lib/pka_mem.h
+           src/lib/pka_queue.c
+           src/lib/pka_queue.h
+           src/lib/pka_ring.c
+           src/lib/pka_ring.h
+           src/lib/pka_vectors.h
+           src/lib/pka.h
+Copyright: 2016 Mellanox Technologies, Ltd.
+License:   BSD-3-Clause
+
+Files:     Makefile
+           documentation/pka-programming-doc.pdf
+           src/Makefile.am
+           src/autogen.sh
+           src/configure.ac
+           src/doc/Doxyfile.in
+           src/doc/Makefile.am
+           src/engine/Makefile.am
+           src/lib/Makefile.am
+           src/libpka.spec
+           src/tests/Makefile.am
+           src/tests/performance/pka_test_performance.c
+           src/tests/pka_test_utils.c
+           src/tests/pka_test_utils.h
+           src/tests/power/pka_test_power.c
+           src/tests/validation/pka_test_validation.c
+           src/tests/validation/pka_test_vectors.h
+           tests/Makefile
+Copyright: __NO_COPYRIGHT_NOR_LICENSE__
+License:   __NO_COPYRIGHT_NOR_LICENSE__
+
+Files:     src/README.engine
+Copyright: 2016-2018 Mellanox Technologies
+License:   __UNKNOWN__
+
+Files:     README
+Copyright: 2016-2018 Mellanox Technologies
+License:   __UNKNOWN__
+ License: BSD
+
+Files:     src/engine/e_bluefield.c
+Copyright: 2008-2016 The OpenSSL Project Authors.
+License:   __UNKNOWN__
+ Licensed under the OpenSSL license (the "License").  You may not use
+ this file except in compliance with the License.  You can obtain a copy
+ in the file LICENSE in the source distribution or at
+ https://www.openssl.org/source/license.html
+
+Files:     src/README.tests
+Copyright: 2016-2018 Mellanox Technologies
+License:   __UNKNOWN__
+ License: BSD
+
+Files:     src/README
+Copyright: 2016-2018 Mellanox Technologies
+License:   __UNKNOWN__
+ License: BSD
+
+Files:     debian/*
+Copyright: 2020 Mellanox Technologies
+License: GPL-2+
+
+License:   BSD-3-Clause
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ .
+ * Redistributions of source code must retain the above copyright
+ notice, this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright
+ notice, this list of conditions and the following disclaimer in
+ the documentation and/or other materials provided with the
+ distribution.
+ * Neither the name of Mellanox Technologies nor the names of its
+ contributors may be used to endorse or promote products derived
+ from this software without specific prior written permission.
+ .
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ .
+ On Debian systems, the complete text of the BSD 3-clause "New" or "Revised"
+ License can be found in `/usr/share/common-licenses/BSD'.
+
+License: GPL-2+
+ This package is free software; you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation; either version 2 of the License, or
+ (at your option) any later version.
+ .
+ This package is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <https://www.gnu.org/licenses/>
+ .
+ On Debian systems, the complete text of the GNU General
+ Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
