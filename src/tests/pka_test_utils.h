@@ -62,10 +62,13 @@ typedef struct
 {
     ecc_curve_t   *curve;
     ecc_point_t   *base_pt;        // aka point G
-    pka_operand_t *base_pt_order;  // aka n - order of point G ("n*G = 1 mod p")
-    pka_operand_t *private_key;    // aka d.
-    ecc_point_t   *public_key;     // aka point Q
-} ecdsa_key_system_t;
+    pka_operand_t *base_pt_order;  // aka n - order of point G
+    pka_operand_t *private_key;    // aka local d.
+    ecc_point_t   *public_key;     // aka point local Q
+} ec_key_system_t;
+
+typedef ec_key_system_t  ecdh_key_system_t;
+typedef ec_key_system_t  ecdsa_key_system_t;
 
 typedef struct
 {
@@ -116,9 +119,19 @@ typedef struct
 
 typedef struct
 {
+    pka_operand_t *local_private_key;    // aka local d.
+    ecc_point_t   *local_public_key;     // aka point local Q
+    pka_operand_t *remote_private_key;   // aka remote d.
+    ecc_point_t   *remote_public_key;    // aka point remote Q
+    ecc_point_t   *answer;
+} test_ecdh_t;
+
+typedef struct
+{
     pka_operand_t   *k;          // Secret num unique to each msg.  0 < k < q.
     pka_operand_t   *hash;       // Message hash
     dsa_signature_t *signature;
+    dsa_signature_t *answer;
 } test_ecdsa_t;
 
 typedef struct
@@ -126,6 +139,7 @@ typedef struct
     pka_operand_t   *k;          // Secret num unique to each msg.  0 < k < q.
     pka_operand_t   *hash;       // Message hash
     dsa_signature_t *signature;
+    dsa_signature_t *answer;
 } test_dsa_t;
 
 typedef enum
@@ -150,6 +164,9 @@ typedef enum
     // Ecc tests.  These use the ecc_key_system_t.
     TEST_ECC_ADD, TEST_ECC_DOUBLE, TEST_ECC_MULTIPLY,
 
+    // Ecdh tests.  These use the ecdh_key_system_t.
+    TEST_ECDH, TEST_ECDHE,
+
     // Ecdsa tests.  These use the ecdsa_key_system_t.
     TEST_ECDSA_GEN, TEST_ECDSA_VERIFY, TEST_ECDSA_GEN_VERIFY,
 
@@ -162,8 +179,9 @@ char *test_name_to_string(pka_test_name_t test_name);
 
 typedef struct
 {
-    uint32_t num_requested;
-    uint32_t num_submitted;
+  //    uint32_t num_requested;
+    uint32_t num_cmd_submits;
+    uint32_t num_total_submits;
     uint32_t num_good_replies;
     uint32_t num_bad_replies;
     uint32_t num_correct_answers;
@@ -211,9 +229,14 @@ typedef struct
     test_stats_t *test_desc_stats;
 } test_desc_t;
 
-extern ecdsa_key_system_t P256_ecdsa;
-extern ecdsa_key_system_t P384_ecdsa;
-extern ecdsa_key_system_t P521_ecdsa;
+// NIST prime curves:
+extern ec_key_system_t P256_ec;
+extern ec_key_system_t P384_ec;
+extern ec_key_system_t P521_ec;
+
+// Bernstein curves:
+extern ec_key_system_t B255_ec;
+extern ec_key_system_t B488_ec;
 
 //
 // helper functions

@@ -62,6 +62,8 @@
 #define PKA_VFIO_CONTAINER_PATH     "/dev/vfio/vfio"
 #define PKA_VFIO_GROUP_FMT          "/dev/vfio/%d"
 
+#define PKA_DEVFS_RING_DEVICES      "/dev/pka/%d"
+
 // Defines specific to device-tree and Linux operating system.
 // Careful, all constants MUST be conform with both devicetree
 // (DTS) and ACPI tables (SSDT).
@@ -270,6 +272,10 @@ int pka_dev_unregister_shim(pka_dev_shim_t *shim);
 
 /// Reset a Ring.
 int pka_dev_reset_ring(pka_dev_ring_t *ring);
+
+/// Clear ring counters. This function resets the master sequencer controller
+/// to clear the command and result counters.
+int pka_dev_clear_ring_counters(pka_dev_ring_t *ring);
 
 /// Read data from the TRNG. Drivers can fill up to 'cnt' bytes of data into
 /// the buffer 'data'. The buffer 'data' is aligned for any type and 'cnt' is

@@ -137,12 +137,6 @@ src/
       implementation meets the design requirements. It also includes
       additional tests which might be used for power tests.
 
-tests/
-  Includes the Makefile used to verify the BlueField PKA software;
-  it mainly consists of regression tests to maintain the software
-  development process.
-
-
 ===============================================================================
 Naming convention
 ===============================================================================

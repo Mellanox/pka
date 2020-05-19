@@ -87,6 +87,10 @@
 //  reset state. Resetting the Sequencer (in order to load other firmware)
 //  should only be done when the EIP-154 is not performing any operations.
 #define PKA_MASTER_SEQ_CTRL_RESET_VAL           0x80000000
+//  Write '1' to bit [30] will reset all Command and Result counters. This
+//  bit is write-only and self clearing and can only be set if the ‘Reset’
+//  bit [31] is ‘1’.
+#define PKA_MASTER_SEQ_CTRL_CLEAR_COUNTERS_VAL  0x40000000
 //  Bit [8] in the PKA Master Sequencer Control/Status Register is tied to
 //  the 'pka_master_irq interrupt' on the EIP-154 interrupt controller.
 #define PKA_MASTER_SEQ_CTRL_MASTER_IRQ_BIT      8

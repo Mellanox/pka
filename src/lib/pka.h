@@ -347,7 +347,7 @@ typedef enum
     RC_EVEN_MODULUS          = 0x81,
     /// Exponent was 0 (for a modular exponentiation).
     RC_ZERO_EXPONENT         = 0x82,
-    /// Modulus was too short (less than 33 significant bits).
+    /// Modulus was too short (less than 9 significant bits).
     RC_SHORT_MODULUS         = 0x83,
     /// Exponent was 1 (for a modular exponentiation).
     RC_ONE_EXPONENT          = 0x84,

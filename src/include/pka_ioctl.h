@@ -44,7 +44,7 @@
 
 #define PKA_IOC_TYPE 0xB7
 
-/// PKA_VFIO_GET_REGION_INFO - _IORW(PKA_IOC_TYPE, 0x0, pka_dev_region_info_t)
+/// PKA_RING_GET_REGION_INFO - _IORW(PKA_IOC_TYPE, 0x0, pka_dev_region_info_t)
 ///
 /// Retrieve information about a device region. This is intended to describe
 /// MMIO, I/O port, as well as bus specific regions (ex. PCI config space).
@@ -60,9 +60,9 @@ typedef struct
     uint64_t mem_size;     ///< Memory region size (bytes).
     uint64_t mem_offset;   ///< Memeory region offset from start of device fd.
 } pka_dev_region_info_t;
-#define PKA_VFIO_GET_REGION_INFO _IOWR(PKA_IOC_TYPE, 0x0, pka_dev_region_info_t)
+#define PKA_RING_GET_REGION_INFO _IOWR(PKA_IOC_TYPE, 0x0, pka_dev_region_info_t)
 
-/// PKA_VFIO_GET_RING_INFO - _IORW(PKA_IOC_TYPE, 0x1, pka_dev_ring_info_t)
+/// PKA_GET_RING_INFO - _IORW(PKA_IOC_TYPE, 0x1, pka_dev_ring_info_t)
 ///
 /// Retrieve information about a ring. This is intended to describe ring
 /// information words located in PKA_BUFFER_RAM. Ring information includes
@@ -105,6 +105,12 @@ typedef struct // Bluefield specific ring information
     uint16_t rslt_wr_stats;
 
 } pka_dev_hw_ring_info_t;
-#define PKA_VFIO_GET_RING_INFO   _IOWR(PKA_IOC_TYPE, 0x1, pka_dev_hw_ring_info_t)
+#define PKA_GET_RING_INFO   _IOWR(PKA_IOC_TYPE, 0x1, pka_dev_hw_ring_info_t)
+
+/// PKA_CLEAR_RING_COUNTERS - _IO(PKA_IOC_TYPE, 0x2)
+///
+/// Clear counters. This is intended to reset all command and result counters.
+/// Return: 0 on success, -errno on failure.
+#define PKA_CLEAR_RING_COUNTERS  _IO(PKA_IOC_TYPE, 0x2)
 
 #endif // __PKA_IOCTL_H__

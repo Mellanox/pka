@@ -770,6 +770,7 @@ int pka_queue_cmd_dequeue(pka_queue_t            *queue,
     uint32_t              total_size;
     uint32_t              operand_idx, operand_cnt;
     uint16_t              buf_len;
+    uint32_t              first_chunk;
 
     if (queue->flags != PKA_QUEUE_TYPE_CMD)
         return -EPERM;
@@ -798,10 +799,20 @@ int pka_queue_cmd_dequeue(pka_queue_t            *queue,
     for (operand_idx = 0;  operand_idx < operand_cnt;  operand_idx++)
     {
         // write the operand info and data.
-        operand    = (pka_operand_t *) &queue->mem[cons_head];
-        operands[operand_idx] = *operand;
+        operand = (pka_operand_t *) &queue->mem[cons_head & queue->mask];
+        if ((cons_head & queue->mask) + sizeof(pka_operand_t) < queue->size)
+        {
+            memcpy(&operands[operand_idx], operand, sizeof(pka_operand_t));
+        }
+        else
+        {
+            first_chunk = queue->size - (cons_head & queue->mask);
+            memcpy(&operands[operand_idx], operand, first_chunk);
+            memcpy(&operands[operand_idx] + first_chunk, &queue->mem[0],
+                        sizeof(pka_operand_t) - first_chunk);
+        }
 
-        buf_len    = PKA_ALIGN(operand->actual_len, 8);
+        buf_len    = PKA_ALIGN(operands[operand_idx].actual_len, 8);
         cons_head += sizeof(pka_operand_t) + buf_len;
     }
     // Set ring descriptor and copy operands to window RAM.

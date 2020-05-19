@@ -9,6 +9,8 @@
 
 #include "pka_test_utils.h"
 
+static uint8_t RSA_VERIFY_EXPON[] = { 0x01, 0x00, 0x01 };
+
 // All of the following constants are in big-endian format.
 
 //static char P256_p_string[] =
@@ -352,6 +354,191 @@ static uint8_t P384_s_buf[] =
     0x68, 0xEB, 0xBE, 0x80, 0x37, 0x94, 0xA4, 0x02
 };
 
+#if 0
+//static char Curve448_p_string[] = 2^448 - 2^224 - 1
+//    "ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff"
+//    "ffffffff fffffffe ffffffff 00000000 00000000 ffffffff";
+static uint8_t Curve448_p_buf[] =
+{
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
+//static char Curve448_a_string[] =
+//    "ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff"
+//    "ffffffff fffffffe ffffffff 00000000 00000000 fffffffc";
+
+static uint8_t Curve448_a_buf[] =
+{
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,
+    0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFC
+};
+
+//static char Curve448_b_string[] =
+//    "b3312fa7 e23ee7e4 988e056b e3f82d19 181d9c6e fe814112"
+//    "0314088f 5013875a c656398d 8a2ed19d 2a85c8ed d3ec2aef";
+
+static uint8_t Curve448_b_buf[] =
+{
+    0xB3, 0x31, 0x2F, 0xA7, 0xE2, 0x3E, 0xE7, 0xE4,
+    0x98, 0x8E, 0x05, 0x6B, 0xE3, 0xF8, 0x2D, 0x19,
+    0x18, 0x1D, 0x9C, 0x6E, 0xFE, 0x81, 0x41, 0x12,
+    0x03, 0x14, 0x08, 0x8F, 0x50, 0x13, 0x87, 0x5A,
+    0xC6, 0x56, 0x39, 0x8D, 0x8A, 0x2E, 0xD1, 0x9D,
+    0x2A, 0x85, 0xC8, 0xED, 0xD3, 0xEC, 0x2A, 0xEF
+};
+
+//static char Curve448_xg_string[] =
+//    "aa87ca22 be8b0537 8eb1c71e f320ad74 6e1d3b62 8ba79b98"
+//    "59f741e0 82542a38 5502f25d bf55296c 3a545e38 72760ab7";
+
+static uint8_t Curve448_xg_buf[] =
+{
+    0xaa, 0x87, 0xca, 0x22, 0xbe, 0x8b, 0x05, 0x37,
+    0x8e, 0xb1, 0xc7, 0x1e, 0xf3, 0x20, 0xad, 0x74,
+    0x6e, 0x1d, 0x3b, 0x62, 0x8b, 0xa7, 0x9b, 0x98,
+    0x59, 0xf7, 0x41, 0xe0, 0x82, 0x54, 0x2a, 0x38,
+    0x55, 0x02, 0xf2, 0x5d, 0xbf, 0x55, 0x29, 0x6c,
+    0x3a, 0x54, 0x5e, 0x38, 0x72, 0x76, 0x0a, 0xb7
+};
+
+//static char Curve448_yg_string[] =
+//    "3617de4a 96262c6f 5d9e98bf 9292dc29 f8f41dbd 289a147c"
+//    "e9da3113 b5f0b8c0 0a60b1ce 1d7e819d 7a431d7c 90ea0e5f";
+
+static uint8_t Curve448_yg_buf[] =
+{
+    0x36, 0x17, 0xde, 0x4a, 0x96, 0x26, 0x2c, 0x6f,
+    0x5d, 0x9e, 0x98, 0xbf, 0x92, 0x92, 0xdc, 0x29,
+    0xf8, 0xf4, 0x1d, 0xbd, 0x28, 0x9a, 0x14, 0x7c,
+    0xe9, 0xda, 0x31, 0x13, 0xb5, 0xf0, 0xb8, 0xc0,
+    0x0a, 0x60, 0xb1, 0xce, 0x1d, 0x7e, 0x81, 0x9d,
+    0x7a, 0x43, 0x1d, 0x7c, 0x90, 0xea, 0x0e, 0x5f
+};
+
+//static char Curve448_n_string[] =
+//    "ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff"
+//    "c7634d81 f4372ddf 581a0db2 48b0a77a ecec196a ccc52973";
+
+// Base_pt_order:
+static uint8_t Curve448_n_buf[] =
+{
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xc7, 0x63, 0x4d, 0x81, 0xf4, 0x37, 0x2d, 0xdf,
+    0x58, 0x1a, 0x0d, 0xb2, 0x48, 0xb0, 0xa7, 0x7a,
+    0xec, 0xec, 0x19, 0x6a, 0xcc, 0xc5, 0x29, 0x73
+};
+
+//static char Curve448_d_string[] =
+//    "c838b852 53ef8dc7 394fa580 8a518398 1c7deef5 a69ba8f4"
+//    "f2117ffe a39cfcd9 0e95f6cb c854abac ab701d50 c1f3cf24";
+
+static uint8_t Curve448_d_buf[] =
+{
+    0xc8, 0x38, 0xb8, 0x52, 0x53, 0xef, 0x8d, 0xc7,
+    0x39, 0x4f, 0xa5, 0x80, 0x8a, 0x51, 0x83, 0x98,
+    0x1c, 0x7d, 0xee, 0xf5, 0xa6, 0x9b, 0xa8, 0xf4,
+    0xf2, 0x11, 0x7f, 0xfe, 0xa3, 0x9c, 0xfc, 0xd9,
+    0x0e, 0x95, 0xf6, 0xcb, 0xc8, 0x54, 0xab, 0xac,
+    0xab, 0x70, 0x1d, 0x50, 0xc1, 0xf3, 0xcf, 0x24
+};
+
+//static char Curve448_xq_string[] =
+//    "1fbac8ee bd0cbf35 640b39ef e0808dd7 74debff2 0a2a329e"
+//    "91713baf 7d7f3c3e 81546d88 3730bee7 e48678f8 57b02ca0";
+
+static uint8_t Curve448_xq_buf[] =
+{
+    0x1f, 0xba, 0xc8, 0xee, 0xbd, 0x0c, 0xbf, 0x35,
+    0x64, 0x0b, 0x39, 0xef, 0xe0, 0x80, 0x8d, 0xd7,
+    0x74, 0xde, 0xbf, 0xf2, 0x0a, 0x2a, 0x32, 0x9e,
+    0x91, 0x71, 0x3b, 0xaf, 0x7d, 0x7f, 0x3c, 0x3e,
+    0x81, 0x54, 0x6d, 0x88, 0x37, 0x30, 0xbe, 0xe7,
+    0xe4, 0x86, 0x78, 0xf8, 0x57, 0xb0, 0x2c, 0xa0
+};
+
+//static char Curve448_yq_string[] =
+//    "eb213103 bd68ce34 3365a8a4 c3d4555f a385f533 0203bdd7"
+//    "6ffad1f3 affb9575 1c132007 e1b24035 3cb0a4cf 1693bdf9";
+
+static uint8_t Curve448_yq_buf[] =
+{
+    0xeb, 0x21, 0x31, 0x03, 0xbd, 0x68, 0xce, 0x34,
+    0x33, 0x65, 0xa8, 0xa4, 0xc3, 0xd4, 0x55, 0x5f,
+    0xa3, 0x85, 0xf5, 0x33, 0x02, 0x03, 0xbd, 0xd7,
+    0x6f, 0xfa, 0xd1, 0xf3, 0xaf, 0xfb, 0x95, 0x75,
+    0x1c, 0x13, 0x20, 0x07, 0xe1, 0xb2, 0x40, 0x35,
+    0x3c, 0xb0, 0xa4, 0xcf, 0x16, 0x93, 0xbd, 0xf9
+};
+
+//static char Curve448_k_string[] =
+//    "dc6b4403 6989a196 e39d1cda c000812f 4bdd8b2d b41bb33a"
+//    "f5137258 5ebd1db6 3f0ce827 5aa1fd45 e2d2a735 f8749359";
+
+static uint8_t Curve448_k_buf[] =
+{
+    0xdc, 0x6b, 0x44, 0x03, 0x69, 0x89, 0xa1, 0x96,
+    0xe3, 0x9d, 0x1c, 0xda, 0xc0, 0x00, 0x81, 0x2f,
+    0x4b, 0xdd, 0x8b, 0x2d, 0xb4, 0x1b, 0xb3, 0x3a,
+    0xf5, 0x13, 0x72, 0x58, 0x5e, 0xbd, 0x1d, 0xb6,
+    0x3f, 0x0c, 0xe8, 0x27, 0x5a, 0xa1, 0xfd, 0x45,
+    0xe2, 0xd2, 0xa7, 0x35, 0xf8, 0x74, 0x93, 0x59
+};
+
+//static char Curve448_kinv_string[] =
+//    "7436f030 88e65c37 ba8e7b33 887fbc87 757514d6 11f7d1fb"
+//    "df6d2104 a297ad31 8cdbf740 4e4ba37e 599666df 37b8d8be";
+
+static uint8_t Curve448_kinv_buf[] =
+{
+    0x74, 0x36, 0xf0, 0x30, 0x88, 0xe6, 0x5c, 0x37,
+    0xba, 0x8e, 0x7b, 0x33, 0x88, 0x7f, 0xbc, 0x87,
+    0x75, 0x75, 0x14, 0xd6, 0x11, 0xf7, 0xd1, 0xfb,
+    0xdf, 0x6d, 0x21, 0x04, 0xa2, 0x97, 0xad, 0x31,
+    0x8c, 0xdb, 0xf7, 0x40, 0x4e, 0x4b, 0xa3, 0x7e,
+    0x59, 0x96, 0x66, 0xdf, 0x37, 0xb8, 0xd8, 0xbe
+};
+
+//static char Curve448_hash_string[] =
+//    "b9210c9d 7e20897a b8659726 6a9d5077 e8db1b06 f7220ed6"
+//    "ee75bd8b 45db3789 1f8ba555 03040041 59f4453d c5b3f5a1";
+
+static uint8_t Curve448_hash_buf[] =
+{
+    0xb9, 0x21, 0x0c, 0x9d, 0x7e, 0x20, 0x89, 0x7a,
+    0xb8, 0x65, 0x97, 0x26, 0x6a, 0x9d, 0x50, 0x77,
+    0xe8, 0xdb, 0x1b, 0x06, 0xf7, 0x22, 0x0e, 0xd6,
+    0xee, 0x75, 0xbd, 0x8b, 0x45, 0xdb, 0x37, 0x89,
+    0x1f, 0x8b, 0xa5, 0x55, 0x03, 0x04, 0x00, 0x41,
+    0x59, 0xf4, 0x45, 0x3d, 0xc5, 0xb3, 0xf5, 0xa1
+};
+
+//static char Curve448_s_string[] =
+//    "20ab3f45 b74f10b6 e11f96a2 c8eb694d 206b9dda 86d3c7e3"
+//    "31c26b22 c987b753 77265776 67adadf1 68ebbe80 3794a402";
+
+static uint8_t Curve448_s_buf[] =
+{
+    0x20, 0xAB, 0x3F, 0x45, 0xB7, 0x4F, 0x10, 0xB6,
+    0xE1, 0x1F, 0x96, 0xA2, 0xC8, 0xEB, 0x69, 0x4D,
+    0x20, 0x6B, 0x9D, 0xDA, 0x86, 0xD3, 0xC7, 0xE3,
+    0x31, 0xC2, 0x6B, 0x22, 0xC9, 0x87, 0xB7, 0x53,
+    0x77, 0x26, 0x57, 0x76, 0x67, 0xAD, 0xAD, 0xF1,
+    0x68, 0xEB, 0xBE, 0x80, 0x37, 0x94, 0xA4, 0x02
+};
+#endif
+
 //static char P521_p_string[] =
 //        "01ff ffffffff ffffffff ffffffff ffffffff ffffffff"
 //    "ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff"
@@ -480,6 +667,8 @@ static char *TEST_NAME_STRING[] =
     [TEST_ECC_ADD]              = "TEST_ECC_ADD",
     [TEST_ECC_DOUBLE]           = "TEST_ECC_DOUBLE",
     [TEST_ECC_MULTIPLY]         = "TEST_ECC_MULTIPLY",
+    [TEST_ECDH]                 = "TEST_ECDH",
+    [TEST_ECDHE]                = "TEST_ECDHE",
     [TEST_ECDSA_GEN]            = "TEST_ECDSA_GEN",
     [TEST_ECDSA_VERIFY]         = "TEST_ECDSA_VERIFY",
     [TEST_ECDSA_GEN_VERIFY]     = "TEST_ECDSA_GEN_VERIFY",
@@ -519,12 +708,16 @@ char *test_name_to_string(pka_test_name_t test_name)
     return "TEST_NOP";
 }
 
+// ecdsa_key_system_t Curve225;
 ecdsa_key_system_t P256_ecdsa;
 ecdsa_key_system_t P384_ecdsa;
+// ecdsa_key_system_t Curve448;
 ecdsa_key_system_t P521_ecdsa;
 
+// static test_ecdsa_t Curve225_test;
 static test_ecdsa_t P256_ecdsa_test;
 static test_ecdsa_t P384_ecdsa_test;
+// static test_ecdsa_t Curve448_test;
 
 static pka_operand_t *P256_kinv;
 static pka_operand_t *P384_kinv;
@@ -3596,7 +3789,7 @@ pka_operand_t *sw_modulo(pka_handle_t   handle,
     if (rc == RC_NO_ERROR)
         return result;
 
-    PKA_ERROR(PKA_TESTS,  "sync_modulo failed rc=%d\n", rc);
+    PKA_ERROR(PKA_TESTS,  "sw_modulo failed rc=%d\n", rc);
     print_operand("  value  =", value,   "\n");
     print_operand("  modulus=", modulus, "\n");
     free_operand(result);
@@ -4006,6 +4199,8 @@ pka_status_t get_results(pka_handle_t   handle,
     uint8_t        res1[MAX_BYTE_LEN], res2[MAX_BYTE_LEN];
 
     memset(&results, 0, sizeof(pka_results_t));
+    memset(&res1[0], 0, sizeof(res1));
+    memset(&res2[0], 0, sizeof(res2));
     init_results_operand(&results, 2, res1, MAX_BYTE_LEN, res2, MAX_BYTE_LEN);
 
     pka_wait_for_results(handle, &results);
@@ -4014,6 +4209,11 @@ pka_status_t get_results(pka_handle_t   handle,
         PKA_ERROR(PKA_TESTS,  "get_results status=0x%x\n", results.status);
         return 0;
     }
+
+    if ((2 <= results.results[0].big_endian) || (2 <= results.results[1].big_endian))
+        PKA_ERROR(PKA_TESTS, "Bad big_endians=0x%x 0x%x opcode=0x%x\n",
+                  results.results[0].big_endian, results.results[1].big_endian,
+                  results.opcode);
 
     if (results.result_cnt != 2)
         PKA_ERROR(PKA_TESTS,  "get_results result_cnt != 2\n");
@@ -4308,6 +4508,10 @@ pka_operand_t *sync_mod_exp(pka_handle_t   handle,
                             pka_operand_t *modulus,
                             pka_operand_t *msg)
 {
+    // HW (via pka_modular_exp) does not properly handle an exponent of 1.
+    if (is_one(exponent))
+        return dup_operand(msg);
+
     if (SUCCESS != pka_modular_exp(handle, NULL, exponent, modulus, msg))
     {
         PKA_ERROR(PKA_TESTS,  "sync_mod_exp failed\n");
@@ -4791,13 +4995,18 @@ static rsa_key_system_t *create_rsa_keys(pka_handle_t       handle,
             return NULL;
         }
 
-        e = power_of_two(handle, test_kind->second_bit_len, true);
-        while (! is_prime(handle, e, 25, false))
+        if (test_kind->second_bit_len == 17)
+            e = make_operand(RSA_VERIFY_EXPON, sizeof(RSA_VERIFY_EXPON), true);
+        else
         {
-            // Increment e by 2 and try again
-            temp = e;
-            e    = sync_add(handle, temp, &TWO);
-            free_operand(temp);
+            e = power_of_two(handle, test_kind->second_bit_len, true);
+            while (! is_prime(handle, e, 25, false))
+            {
+                // Increment e by 2 and try again
+                temp = e;
+                e    = sync_add(handle, temp, &TWO);
+                free_operand(temp);
+            }
         }
     }
     else
@@ -5181,23 +5390,24 @@ static ecc_point_t *select_base_pt(pka_handle_t    handle,
         return NULL;
 }
 
-static ecdsa_key_system_t *create_ecdsa_key_system(pka_handle_t  handle,
-                                                   uint32_t      p_bit_len,
-                                                   uint32_t      q_bit_len,
-                                                   uint32_t      verbosity)
+static ec_key_system_t *create_ec_key_system(pka_handle_t  handle,
+                                             uint32_t      p_bit_len,
+                                             char         *key_system,
+                                             uint32_t      verbosity)
 {
-    ecdsa_key_system_t *ecdsa_keys;
-    pka_operand_t      *base_pt_order, *d;
-    ecc_curve_t        *curve;
-    ecc_point_t        *base_pt, *public_pt;
+    ec_key_system_t *ec_keys;
+    pka_operand_t   *base_pt_order, *d;
+    ecc_curve_t     *curve;
+    ecc_point_t     *base_pt, *public_pt;
 
     // Select curve.
-    LOG(2, "  select a standard ECC curve for this ECDSA key system\n");
+    LOG(2, "  select a standard ECC curve for this %s key system\n",
+            key_system);
     curve = select_ecc_curve(handle, p_bit_len);
     if (curve == NULL)
     {
         PKA_ERROR(PKA_TESTS,
-                "create_ecdsa_key_system failed to select an ecc curve\n");
+                "create_ec_key_system failed to select an ecc curve\n");
         return NULL;
     }
 
@@ -5207,55 +5417,163 @@ static ecdsa_key_system_t *create_ecdsa_key_system(pka_handle_t  handle,
     if (base_pt == NULL)
     {
         PKA_ERROR(PKA_TESTS,
-            "create_ecdsa_key_system failed to find a suitable base_pt\n");
+            "create_ec_key_system failed to find a suitable base_pt\n");
         return NULL;
     }
 
     // Finally create a private/public key pair.
-    LOG(2, "  create a ECDSA private/public key pair.\n");
+    LOG(2, "  create a %s private/public key pair.\n", key_system);
     d          = rand_non_zero_integer(handle, base_pt_order);
     public_pt  = sync_ecc_multiply(handle, curve, base_pt, d);
 
-    ecdsa_keys                = calloc(1, sizeof(ecdsa_key_system_t));
-    ecdsa_keys->curve         = curve;
-    ecdsa_keys->base_pt       = base_pt;
-    ecdsa_keys->base_pt_order = base_pt_order;
-    ecdsa_keys->private_key   = d;
-    ecdsa_keys->public_key    = public_pt;
-    return ecdsa_keys;
+    ec_keys                = calloc(1, sizeof(ec_key_system_t));
+    ec_keys->curve         = curve;
+    ec_keys->base_pt       = base_pt;
+    ec_keys->base_pt_order = base_pt_order;
+    ec_keys->private_key   = d;
+    ec_keys->public_key    = public_pt;
+    return ec_keys;
+}
+
+static ecdh_key_system_t *create_ecdh_key_system(pka_handle_t  handle,
+                                                 uint32_t      p_bit_len,
+                                                 uint32_t      verbosity)
+{
+    return create_ec_key_system(handle, p_bit_len, "ECDH", verbosity);
+}
+
+static ecdsa_key_system_t *create_ecdsa_key_system(pka_handle_t  handle,
+                                                   uint32_t      p_bit_len,
+                                                   uint32_t      verbosity)
+{
+    return create_ec_key_system(handle, p_bit_len, "ECDSA", verbosity);
+}
+
+static test_ecdh_t *create_ecdh_test(pka_handle_t       handle,
+                                     ecdh_key_system_t *ecdh_keys,
+                                     bool               make_answers,
+                                     uint32_t           verbosity)
+{
+    pka_operand_t *remote_private_key;
+    ecc_point_t   *remote_public_key, *answer;
+    test_ecdh_t   *ecdh_test;
+
+    LOG(2, "  create random ECDH operands.\n");
+
+    remote_private_key = rand_non_zero_integer(handle,
+                                               ecdh_keys->base_pt_order);
+    remote_public_key  = sync_ecc_multiply(handle, ecdh_keys->curve,
+                                           ecdh_keys->base_pt,
+                                           remote_private_key);
+
+    answer = NULL;
+    if (make_answers)
+    {
+        LOG(2, "  calculate the ECDH secret using sofware algorithms.\n");
+        answer = sync_ecc_multiply(handle, ecdh_keys->curve,
+                                   remote_public_key,
+                                   ecdh_keys->private_key);
+        // *TBD*
+        LOG(2, "  done calculating the ECDH shared secret.\n");
+    }
+
+
+    ecdh_test                     = calloc(1, sizeof(test_ecdh_t));
+    ecdh_test->remote_private_key = remote_private_key;
+    ecdh_test->remote_public_key  = remote_public_key;
+    ecdh_test->answer             = answer;
+    return ecdh_test;
+}
+
+static pka_status_t create_ecdh_test_descs(pka_handle_t       handle,
+                                           pka_test_kind_t   *test_kind,
+                                           test_desc_t       *test_descs[],
+                                           bool               make_answers,
+                                           uint32_t           verbosity)
+{
+    ecdh_key_system_t *ecdh_keys;
+    pka_test_name_t    test_name;
+    test_desc_t       *test_desc;
+    test_ecdh_t       *ecdh_test;
+    uint32_t           num_key_systems, tests_per_key_system, test_desc_idx;
+    uint32_t           key_cnt, test_cnt, p_bit_len;
+
+    test_name            = test_kind->test_name;
+    p_bit_len            = test_kind->bit_len;
+    num_key_systems      = test_kind->num_key_systems;
+    tests_per_key_system = test_kind->tests_per_key_system;
+    LOG(1, "Create %u ECDH key systems:\n", num_key_systems);
+
+    PKA_ASSERT((test_name == TEST_ECDH) || (test_name == TEST_ECDHE));
+    if (test_name == TEST_ECDHE)
+       make_answers = false;
+
+    // First loop over the creation of the ecdh_keys objects.  Then for each
+    // ecdh_key object create the required number of different ecdh tests.
+    test_desc_idx = 0;
+    for (key_cnt = 1;  key_cnt <= num_key_systems;  key_cnt++)
+    {
+
+        ecdh_keys = create_ecdh_key_system(handle, p_bit_len, verbosity);
+
+        LOG(1, "Create %u ECDH tests (random msg and possible answer).\n",
+            tests_per_key_system);
+
+        for (test_cnt = 1;  test_cnt <= tests_per_key_system;  test_cnt++)
+        {
+            ecdh_test = create_ecdh_test(handle, ecdh_keys, make_answers,
+                                         verbosity);
+            test_desc  = calloc(1, sizeof(test_desc_t));
+
+            test_desc->test_kind        = test_kind;
+            test_desc->key_system       = ecdh_keys;
+            test_desc->test_operands    = ecdh_test;
+            test_descs[test_desc_idx++] = test_desc;
+        }
+
+        LOG(1, "Done creating the %u ECDH tests.\n", tests_per_key_system);
+    }
+
+    LOG(1, "Done creating the %u ECDH key systems.\n", num_key_systems);
+    return SUCCESS;
 }
 
 static test_ecdsa_t *create_ecdsa_test(pka_handle_t        handle,
+                                       pka_test_kind_t    *test_kind,
                                        ecdsa_key_system_t *ecdsa_keys,
-                                       uint32_t            n_bit_len,
                                        bool                make_answers,
                                        uint32_t            verbosity)
 {
-    dsa_signature_t *signature;
-    pka_operand_t   *c, *n_minus_1, *temp, *k, *hash;
+    dsa_signature_t *answer, *signature;
+    pka_operand_t   *base_pt_order, *c, *n_minus_1, *temp, *k, *hash;
     test_ecdsa_t    *ecdsa_test;
-    uint32_t         hash_len;
+    uint32_t         n, hash_len;
+    uint8_t          big_endian;
 
-    LOG(2, "  create a random ECDSA operands like the hash and secret k.\n");
-    c          = rand_operand(handle, n_bit_len + 64, false);
-    n_minus_1  = sync_subtract(handle, ecdsa_keys->base_pt_order, &ONE);
-    temp       = sync_modulo(handle, c, n_minus_1);
-    k          = sync_add(handle, temp, &ONE);
+    LOG(2, "  create the random ECDSA operands like the hash and secret k.\n");
+    base_pt_order = ecdsa_keys->base_pt_order;
+    n             = operand_bit_len(base_pt_order);
+    c             = rand_operand(handle, n + 64, false);
+    n_minus_1     = sync_subtract(handle, base_pt_order, &ONE);
+    temp          = sync_modulo(handle, c, n_minus_1);
+    k             = sync_add(handle, temp, &ONE);
 
-    hash_len   = n_bit_len;  // *TBD*
+    hash_len   = n - 16;  // *TBD*
     hash       = rand_operand(handle, hash_len, false);
-    signature  = NULL;
+    big_endian = pka_get_rings_byte_order(handle);
+    signature  = malloc_dsa_signature(MAX_ECC_BUF, MAX_ECC_BUF, big_endian);
+    answer     = NULL;
 
-    if (make_answers)
+    if ((make_answers) || (test_kind->test_name == TEST_ECDSA_VERIFY))
     {
         LOG(2, "  calculate the ECDSA signature using sofware algorithms.\n");
-        signature = sw_ecdsa_gen(handle,
-                                 ecdsa_keys->curve,
-                                 ecdsa_keys->base_pt,
-                                 ecdsa_keys->base_pt_order,
-                                 ecdsa_keys->private_key,
-                                 hash,
-                                 k);
+        answer = sw_ecdsa_gen(handle,
+                              ecdsa_keys->curve,
+                              ecdsa_keys->base_pt,
+                              ecdsa_keys->base_pt_order,
+                              ecdsa_keys->private_key,
+                              hash,
+                              k);
         LOG(2, "  done calculating the ECDSA signature.\n");
     }
 
@@ -5267,6 +5585,7 @@ static test_ecdsa_t *create_ecdsa_test(pka_handle_t        handle,
     ecdsa_test->k         = k;
     ecdsa_test->hash      = hash;
     ecdsa_test->signature = signature;
+    ecdsa_test->answer    = answer;
     return ecdsa_test;
 }
 
@@ -5281,11 +5600,10 @@ static pka_status_t create_ecdsa_test_descs(pka_handle_t       handle,
     test_desc_t        *test_desc;
     test_ecdsa_t       *ecdsa_test;
     uint32_t            num_key_systems, tests_per_key_system, test_desc_idx;
-    uint32_t            key_cnt, test_cnt, p_bit_len, q_bit_len;
+    uint32_t            key_cnt, test_cnt, p_bit_len;
 
     test_name            = test_kind->test_name;
     p_bit_len            = test_kind->bit_len;
-    q_bit_len            = test_kind->second_bit_len;
     num_key_systems      = test_kind->num_key_systems;
     tests_per_key_system = test_kind->tests_per_key_system;
     LOG(1, "Create %u ECDSA key systems:\n", num_key_systems);
@@ -5300,16 +5618,15 @@ static pka_status_t create_ecdsa_test_descs(pka_handle_t       handle,
     for (key_cnt = 1;  key_cnt <= num_key_systems;  key_cnt++)
     {
 
-        ecdsa_keys = create_ecdsa_key_system(handle, p_bit_len, q_bit_len,
-                                             verbosity);
+        ecdsa_keys = create_ecdsa_key_system(handle, p_bit_len, verbosity);
 
         LOG(1, "Create %u ECDSA tests (random msg and possible answer).\n",
             tests_per_key_system);
 
         for (test_cnt = 1;  test_cnt <= tests_per_key_system;  test_cnt++)
         {
-            ecdsa_test = create_ecdsa_test(handle, ecdsa_keys, q_bit_len,
-                                           make_answers, verbosity);
+            ecdsa_test = create_ecdsa_test(handle, test_kind, ecdsa_keys, make_answers,
+                                           verbosity);
             test_desc  = calloc(1, sizeof(test_desc_t));
 
             test_desc->test_kind        = test_kind;
@@ -5392,7 +5709,7 @@ static pka_operand_t *create_dsa_g(pka_handle_t   handle,
         g = sync_mod_exp(handle, exponent, p, h);
         if (pki_compare(g, &ONE) == RC_RIGHT_IS_SMALLER)
         {
-            // Note that 2<= g <= p - 1 && g^q mod p == 1.
+            // Note that 2 <= g <= p-1 && g^q mod p == 1.
             PKA_ASSERT(pki_compare(g, p) == RC_LEFT_IS_SMALLER);
             mod_exp = sync_mod_exp(handle, q, p, g);
             PKA_ASSERT(pki_compare(mod_exp, &ONE) == RC_COMPARE_EQUAL);
@@ -5460,15 +5777,17 @@ static dsa_key_system_t *create_dsa_key_system(pka_handle_t  handle,
 }
 
 static test_dsa_t *create_dsa_test(pka_handle_t      handle,
+                                   pka_test_kind_t  *test_kind,
                                    dsa_key_system_t *dsa_keys,
                                    uint32_t          q_bit_len,
                                    bool              make_answers,
                                    uint32_t          verbosity)
 {
-    dsa_signature_t *signature;
+    dsa_signature_t *signature, *answer;
     pka_operand_t   *c, *q_minus_1, *temp, *k, *hash;
     test_dsa_t      *dsa_test;
     uint32_t         hash_len;
+    uint8_t          big_endian;
 
     LOG(2, "  create a random DSA operands like the hash and secret k.\n");
     c          = rand_operand(handle, q_bit_len + 64, false);
@@ -5478,18 +5797,20 @@ static test_dsa_t *create_dsa_test(pka_handle_t      handle,
 
     hash_len   = q_bit_len;  // *TBD*
     hash       = rand_operand(handle, hash_len, false);
-    signature  = NULL;
+    big_endian = pka_get_rings_byte_order(handle);
+    signature  = malloc_dsa_signature(MAX_BUF, MAX_BUF, big_endian);
+    answer     = NULL;
 
-    if (make_answers)
+    if ((make_answers) || (test_kind->test_name == TEST_DSA_VERIFY))
     {
         LOG(2, "  calculate the DSA signature using sofware algorithms.\n");
-        signature = sw_dsa_gen(handle,
-                               dsa_keys->p,
-                               dsa_keys->q,
-                               dsa_keys->g,
-                               dsa_keys->private_key,
-                               hash,
-                               k);
+        answer = sw_dsa_gen(handle,
+                            dsa_keys->p,
+                            dsa_keys->q,
+                            dsa_keys->g,
+                            dsa_keys->private_key,
+                            hash,
+                            k);
         LOG(2, "  done calculating the DSA signature.\n");
     }
 
@@ -5501,6 +5822,7 @@ static test_dsa_t *create_dsa_test(pka_handle_t      handle,
     dsa_test->k         = k;
     dsa_test->hash      = hash;
     dsa_test->signature = signature;
+    dsa_test->answer    = answer;
     return dsa_test;
 }
 
@@ -5548,7 +5870,7 @@ static pka_status_t create_dsa_test_descs(pka_handle_t     handle,
 
         for (test_cnt = 1;  test_cnt <= tests_per_key_system;  test_cnt++)
         {
-            dsa_test  = create_dsa_test(handle, dsa_keys, q_bit_len,
+            dsa_test  = create_dsa_test(handle, test_kind, dsa_keys, q_bit_len,
                                         make_answers, verbosity);
             test_desc = calloc(1, sizeof(test_desc_t));
 
@@ -5602,6 +5924,11 @@ pka_status_t create_pka_test_descs(pka_handle_t     handle,
     case TEST_ECC_MULTIPLY:
         return create_ecc_test_descs(handle, test_kind, test_descs,
                                      make_answers, verbosity);
+
+    case TEST_ECDH:
+    case TEST_ECDHE:
+        return create_ecdh_test_descs(handle, test_kind, test_descs,
+                                      make_answers, verbosity);
     case TEST_ECDSA_GEN:
     case TEST_ECDSA_VERIFY:
     case TEST_ECDSA_GEN_VERIFY:
@@ -5711,20 +6038,31 @@ pka_status_t chk_bit_lens(pka_test_kind_t *test_kind)
             "ECC tests require bit_len to be in the range 33..4096\n");
         return FAILURE;
 
-    case TEST_ECDSA_GEN:
-    case TEST_ECDSA_VERIFY:
-    case TEST_ECDSA_GEN_VERIFY:
-        // test_kind->bit_len MUST equal 256, 384 or 521
-        // test_kind->second_bit_len must be in the range 33..520 AND
-        // test_kind->second_bit_len must be < test_kind->bit_len
-        if (((test_kind->bit_len == 256) || (test_kind->bit_len == 384) ||
-            (test_kind->bit_len == 521)) && (33 <= test_kind->second_bit_len) &&
-            (test_kind->second_bit_len < test_kind->bit_len))
+    case TEST_ECDH:
+    case TEST_ECDHE:
+        // test_kind->bit_len MUST equal 255, 256, 384, 448 or 521
+        if ((test_kind->bit_len == 255) || (test_kind->bit_len == 256) ||
+                (test_kind->bit_len == 384) || (test_kind->bit_len == 448) ||
+                (test_kind->bit_len == 521))
             return SUCCESS;
 
         PKA_ERROR(PKA_TESTS,
-            "ECDSA tests require bit_len to be either 256, 384 or 521 "
-            "and 33 <= second_bit < bit_len\n");
+                  "ECDH tests require bit_len to be either 255, 256, 384, "
+                  "448 or 521\n");
+        return FAILURE;
+
+    case TEST_ECDSA_GEN:
+    case TEST_ECDSA_VERIFY:
+    case TEST_ECDSA_GEN_VERIFY:
+        // test_kind->bit_len MUST equal 255, 256, 384, 448 or 521
+        if ((test_kind->bit_len == 255) || (test_kind->bit_len == 256) ||
+                (test_kind->bit_len == 384) || (test_kind->bit_len == 448) ||
+                (test_kind->bit_len == 521))
+            return SUCCESS;
+
+        PKA_ERROR(PKA_TESTS,
+                  "ECDSA tests require bit_len to be either 255, 256, 384, "
+                  "448 or 521\n");
         return FAILURE;
 
     case TEST_DSA_GEN:
@@ -5733,6 +6071,11 @@ pka_status_t chk_bit_lens(pka_test_kind_t *test_kind)
         // test_kind->bit_len must be in range 33 .. 4096 and
         // test_kind->second_bit_len must be in the range 9..4095 AND
         // test_kind->second_bit_len must be < test_kind->bit_len
+        // The standard DSA domain parameters are:
+        //     bit_len = 1024 second_bit_len = 160
+        //     bit_len = 2048 second_bit_len = 224
+        //     bit_len = 2048 second_bit_len = 256
+        //     bit_len = 3072 second_bit_len = 256
         if ((33 <= test_kind->bit_len) && (test_kind->bit_len <= 4096) &&
             (9 <= test_kind->second_bit_len) &&
             (test_kind->second_bit_len < test_kind->bit_len))
@@ -5809,6 +6152,38 @@ static void init_ecc_values(uint8_t big_endian)
                                   P521_yg_buf, sizeof(P521_yg_buf),
                                   big_endian);
 
+#if 0
+    // Set up B255_ec* params
+    B255_ec.curve = B255;
+    B255_ecdsa.base_pt       = B255_base_pt;
+    B255_ecdsa.base_pt_order = make_operand(B255_n_buf,
+                                            sizeof(B255_n_buf),
+                                            big_endian);
+    B255_ecdsa.private_key   = make_operand(B255_d_buf,
+                                            sizeof(B255_d_buf),
+                                            big_endian);
+    B255_ecdsa.public_key    = make_ecc_point(NULL,
+                                              B255_xq_buf, sizeof(B255_xq_buf),
+                                              B255_yq_buf, sizeof(B255_yq_buf),
+                                              big_endian);
+
+    B255_kinv                = make_operand(B255_kinv_buf,
+                                            sizeof(B255_kinv_buf),
+                                            big_endian);
+    B255_ecdsa_test.hash     = make_operand(B255_hash_buf,
+                                            sizeof(B255_hash_buf),
+                                            big_endian);
+    B255_ecdsa_test.k        = make_operand(B255_k_buf,
+                                            sizeof(B255_k_buf),
+                                            big_endian);
+
+    B255_ecdsa_test.signature = calloc(1, sizeof(dsa_signature_t));
+    B255_ecdsa_test.signature->s.big_endian = big_endian;
+    make_operand_buf(&B255_ecdsa_test.signature->s,
+                     B255_s_buf,
+                     sizeof(B255_s_buf));
+#endif
+
     // Set up P256_ecdsa* params
     P256_ecdsa.curve         = P256;
     P256_ecdsa.base_pt       = P256_base_pt;
@@ -5867,6 +6242,37 @@ static void init_ecc_values(uint8_t big_endian)
     P384_ecdsa_test.signature->s.big_endian = big_endian;
     make_operand_buf(&P384_ecdsa_test.signature->s,
                      P384_s_buf, sizeof(P384_s_buf));
+
+#if 0
+    // Set up Curve448* params
+    Curve448.curve         = Curve448;
+    Curve448.base_pt       = Curve448_base_pt;
+    Curve448.base_pt_order = make_operand(Curve448_n_buf,
+                                            sizeof(Curve448_n_buf),
+                                            big_endian);
+    Curve448.private_key   = make_operand(Curve448_d_buf,
+                                            sizeof(Curve448_d_buf),
+                                            big_endian);
+    Curve448.public_key    = make_ecc_point(NULL,
+                                              Curve448_xq_buf, sizeof(Curve448_xq_buf),
+                                              Curve448_yq_buf, sizeof(Curve448_yq_buf),
+                                              big_endian);
+
+    Curve448_kinv          = make_operand(Curve448_kinv_buf,
+                                           sizeof(Curve448_kinv_buf),
+                                           big_endian);
+    Curve448_test.hash    = make_operand(Curve448_hash_buf,
+                                           sizeof(Curve448_hash_buf),
+                                           big_endian);
+    Curve448_test.k       = make_operand(Curve448_k_buf,
+                                           sizeof(Curve448_k_buf),
+                                           big_endian);
+
+    Curve448_test.signature = calloc(1, sizeof(dsa_signature_t));
+    Curve448_test.signature->s.big_endian = big_endian;
+    make_operand_buf(&Curve448_test.signature->s,
+                     Curve448_s_buf, sizeof(Curve448_s_buf));
+#endif
 
     // Set up P521_ecdsa* params
     P521_ecdsa.curve         = P521;

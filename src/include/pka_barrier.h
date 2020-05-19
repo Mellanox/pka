@@ -39,6 +39,7 @@
 // ARMv8 Assembler code to implement memory barrier:
 
 #define dmb(opt)  ({ asm volatile("dmb " #opt : : : "memory"); })
+#define dsb(opt)  ({ asm volatile("dsb " #opt : : : "memory"); })
 
 // General memory barrier. Guarantees that the LOAD and STORE operations
 // generated before the barrier occur before the LOAD and STORE operations
@@ -66,7 +67,7 @@ static inline void pka_rmb(void)
 
 static inline void pka_mb_full(void)
 {
-    __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    dsb(sy);
 }
 
 // CPU pause -i.e. wait for few CPU cycles. This function is implemented in the

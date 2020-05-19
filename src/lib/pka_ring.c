@@ -99,40 +99,25 @@ static bool pka_ring_has_nonzero_counters(pka_ring_info_t *ring)
 
     reg_offset = pka_ring_cmd_cnt_offset(ring->reg_addr);
     cmd_count  = pka_mmio_read(ring->reg_ptr + reg_offset);
-
     PKA_DEBUG(PKA_RING, "CMMD_CTR_INC_%u=%lu\n", ring->ring_id, cmd_count);
 
     reg_offset = pka_ring_rslt_cnt_offset(ring->reg_addr);
     rslt_count = pka_mmio_read(ring->reg_ptr + reg_offset);
-
     PKA_DEBUG(PKA_RING, "RSLT_CTR_DEC_%u=%lu\n", ring->ring_id, rslt_count);
 
-    if ((rslt_count == 0) && (cmd_count == 0))
-        return false;
-
-    if ((rslt_count != 0) && (cmd_count == 0))
+    if ((cmd_count != 0) || (rslt_count != 0))
     {
-        // Decrement result count by the number we read out.
-        pka_mmio_write(ring->reg_ptr + reg_offset, rslt_count);
+        PKA_DEBUG(PKA_RING, "non-zero HW counters - reinit PK block\n");
 
-        // Reread the result count to see if the reset worked.
-        rslt_count = pka_mmio_read(ring->reg_ptr + reg_offset);
-        if (rslt_count == 0)
-        {
-            PKA_DEBUG(PKA_RING, "successfully cleared non-zero "
-                                    "RSLT_CTR_DEC_%u=%lu on ring %u\n",
-                                     ring->ring_id, rslt_count, ring->ring_id);
-            return false;
-        }
-        else
-            PKA_DEBUG(PKA_RING, "failed to clear non-zero RSLT_CTR_DEC_%u"
-                                    "=%lu on ring %u\n", ring->ring_id,
-                                    rslt_count, ring->ring_id);
+        // reset all command and result counters.
+        if (ioctl(ring->fd, PKA_CLEAR_RING_COUNTERS))
+            PKA_ERROR(PKA_RING,
+                "failed to clear non-zero CMMD_CTR_INC_x and RSLT_CTR_DEC_x\n");
+
+        return true;
     }
 
-    PKA_DEBUG(PKA_RING, "non-zero HW counters - reinit PK block\n");
-
-    return true;
+    return false;
 }
 
 static void pka_ring_reset_mem(pka_ring_info_t *ring)

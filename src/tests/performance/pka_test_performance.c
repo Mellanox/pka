@@ -31,6 +31,11 @@ typedef struct
 
     test_stats_t    thread_stats;
     uint64_t        thread_cycles;
+    uint64_t        create_cycles;
+    uint64_t        init_cycles;
+    uint64_t        start_cycles;
+    uint64_t        end_cycles;
+    uint64_t        final_cycles;
 } thread_state_t;
 
 typedef struct
@@ -62,6 +67,9 @@ static const uint32_t DEFAULT_BIT_LEN[] =
     // Ecc tests.  These use the ecc_key_system_t.
     [TEST_ECC_ADD ... TEST_ECC_MULTIPLY] = 256,
 
+    // Ecdh tests.  These use the ecdh_key_system_t.
+    [TEST_ECDH ... TEST_ECDHE] = 256,
+
     // Ecdsa tests.  These use the ecdsa_key_system_t.
     [TEST_ECDSA_GEN ... TEST_ECDSA_GEN_VERIFY] = 256,
 
@@ -92,6 +100,8 @@ static uint32_t overall_cmds_done   = 0;
 static uint32_t overall_bad_results = 0;
 static uint64_t overall_start_time;
 static uint64_t overall_end_time;
+static uint64_t main_init1_cycles;
+static uint64_t  main_pre_barrier;
 static uint64_t cpu_freq;   // cycles per second.
 
 static test_stats_t overall_test_stats;
@@ -99,6 +109,7 @@ static test_stats_t overall_test_stats;
 static uint32_t verbosity = 0;
 
 static pka_barrier_t thread_start_barrier;
+static pka_barrier_t thread_end_barrier;
 
 // *FIXME*
 #ifdef ARMV8_PMU_ENABLE
@@ -134,9 +145,13 @@ static __pka_inline void pm_enable(void)
     // bit 31,1 enable.
     //
     uint32_t r = 0;
+    uint64_t zero = 0;
+
     asm volatile("mrs %0, pmcntenset_el0" : "=r" (r));
-    asm volatile("msr pmcntenset_el0, %0" : : "r" (r|1));
+    asm volatile("msr pmcntenset_el0, %0" : : "r" (r|0x80000001));
+    asm volatile("msr pmccntr_el0,    %0" : : "r" (zero));
 }
+
 static __pka_inline void pm_disable()
 {
     //
@@ -144,8 +159,9 @@ static __pka_inline void pm_disable()
     // register: clear bit 0.
     //
     uint32_t r = 0;
+
     asm volatile("mrs %0, pmcntenset_el0" : "=r" (r));
-    asm volatile("msr pmcntenset_el0, %0" : : "r" (r&&0xfffffffe));
+    asm volatile("msr pmcntenset_el0, %0" : : "r" (r&0x7ffffffe));
 }
 #define pka_get_cycle_cnt() pm_get_cycles()
 #else
@@ -500,7 +516,7 @@ static pka_status_t submit_ecc_test(pka_handle_t  handle,
             print_operand("multiplier   = ", ecc_test->multiplier, "\n");
 
         rc = pka_ecc_pt_mult(handle, user_data_ptr, curve, pointA,
-                                   ecc_test->multiplier);
+                                ecc_test->multiplier);
         break;
 
     default:
@@ -511,6 +527,109 @@ static pka_status_t submit_ecc_test(pka_handle_t  handle,
     {
         printf("Bad submit test_name=%s rc=%d\n",
                 test_name_to_string(test_name), rc);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static pka_status_t submit_ecdh_test(pka_handle_t  handle,
+                                     user_data_t  *user_data_ptr,
+                                     test_desc_t  *test_desc,
+                                     uint32_t      test_idx,
+                                     bool          first_submit)
+{
+    ecdh_key_system_t *keys;
+    pka_test_kind_t   *test_kind;
+    pka_test_name_t    test_name;
+    pka_result_code_t  rc;
+    pka_operand_t     *base_pt_order, *local_private_key;
+    test_ecdh_t       *ecdh_test;
+    ecc_curve_t       *curve;
+    ecc_point_t       *base_pt, *remote_public_key, *local_public_key;
+
+    test_kind         = (pka_test_kind_t   *) test_desc->test_kind;
+    keys              = (ecdh_key_system_t *) test_desc->key_system;
+    ecdh_test         = (test_ecdh_t       *) test_desc->test_operands;
+    curve             = keys->curve;
+    base_pt           = keys->base_pt;
+    base_pt_order     = keys->base_pt_order;
+    remote_public_key = ecdh_test->remote_public_key;
+    test_name         = test_kind->test_name;
+
+    if (3 <= verbosity)
+    {
+        printf("\nRunning test_idx=%u test_name=%s first_submit=%s\n", test_idx,
+               test_name_to_string(test_name), first_submit ? "true" : "false");
+        print_operand("curve->p             = ", &curve->p,             "\n");
+        print_operand("curve->a             = ", &curve->a,             "\n");
+        print_operand("curve->b             = ", &curve->b,             "\n");
+        print_operand("base_pt->x           = ", &base_pt->x,           "\n");
+        print_operand("base_pt->y           = ", &base_pt->y,           "\n");
+        print_operand("base_pt_order        = ", base_pt_order,         "\n");
+        print_operand("remote_public_key->x = ", &remote_public_key->x, "\n");
+        print_operand("remote_public_key->y = ", &remote_public_key->y, "\n");
+    }
+
+    switch (test_name)
+    {
+    case TEST_ECDH:
+        local_private_key = keys->private_key;
+        local_public_key  = keys->public_key;
+
+        if (3 <= verbosity)
+        {
+            print_operand("local_private_key    = ", local_private_key,   "\n");
+            print_operand("local_public_key->x  = ", &local_public_key->x, "\n");
+            print_operand("local_public_key->y  = ", &local_public_key->y, "\n");
+        }
+
+        rc = pka_ecc_pt_mult(handle, user_data_ptr, curve, remote_public_key,
+                                local_private_key);
+        break;
+
+    case TEST_ECDHE:
+        if (first_submit)
+        {
+            // Need to create a new "ephemeral" local private key and use that
+            // to calculate and send the corresponding local public key to the
+            // other side.
+            local_private_key = rand_non_zero_integer(handle, base_pt_order);
+            ecdh_test->local_private_key = local_private_key;
+
+            rc = pka_ecc_pt_mult(handle, user_data_ptr, curve,
+                                    base_pt, local_private_key);
+        }
+        else
+        {
+            local_private_key = ecdh_test->local_private_key;
+            local_public_key  = ecdh_test->local_public_key;
+
+            if (3 <= verbosity)
+            {
+                print_operand("local_private_key    = ", local_private_key,
+                                "\n");
+                print_operand("local_public_key->x  = ", &local_public_key->x,
+                                "\n");
+                print_operand("local_public_key->y  = ", &local_public_key->y,
+                                "\n");
+            }
+
+            // Now determine the shared secret by multiplying the remote public
+            // key by our newly created local private key.
+            rc = pka_ecc_pt_mult(handle, user_data_ptr, curve,
+                                    remote_public_key, local_private_key);
+        }
+        break;
+
+    default:
+        PKA_ASSERT(false);
+    }
+
+    if (rc != RC_NO_ERROR)
+    {
+        printf("Bad submit test_name=%s rc=%d\n",
+               test_name_to_string(test_name), rc);
         return FAILURE;
     }
 
@@ -540,13 +659,12 @@ static pka_status_t submit_ecdsa_test(pka_handle_t  handle,
     base_pt       = keys->base_pt;
     base_pt_order = keys->base_pt_order;
     hash          = ecdsa_test->hash;
-    signature     = ecdsa_test->signature;
     test_name     = test_kind->test_name;
 
     if (3 <= verbosity)
     {
-        printf("\nRunning test_idx=%u test_name=%s\n", test_idx,
-               test_name_to_string(test_name));
+        printf("\nRunning test_idx=%u test_name=%s first_submit=%s\n", test_idx,
+               test_name_to_string(test_name), first_submit ? "true" : "false");
         print_operand("curve->p      = ", &curve->p,      "\n");
         print_operand("curve->a      = ", &curve->a,      "\n");
         print_operand("curve->b      = ", &curve->b,      "\n");
@@ -554,14 +672,6 @@ static pka_status_t submit_ecdsa_test(pka_handle_t  handle,
         print_operand("base_pt->y    = ", &base_pt->y,    "\n");
         print_operand("base_pt_order = ", base_pt_order, "\n");
         print_operand("hash          = ", hash,          "\n");
-    }
-
-    if (test_name == TEST_ECDSA_GEN_VERIFY)
-    {
-        if (first_submit)
-            test_name = TEST_ECDSA_GEN;
-        else
-            test_name = TEST_ECDSA_VERIFY;
     }
 
     switch (test_name)
@@ -574,12 +684,13 @@ static pka_status_t submit_ecdsa_test(pka_handle_t  handle,
         }
 
         rc = pka_ecdsa_signature_generate(handle, user_data_ptr,
-                                curve, base_pt, base_pt_order,
-                                keys->private_key, ecdsa_test->hash,
-                                ecdsa_test->k);
+                                          curve, base_pt, base_pt_order,
+                                          keys->private_key, ecdsa_test->hash,
+                                          ecdsa_test->k);
         break;
 
     case TEST_ECDSA_VERIFY:
+        signature = ecdsa_test->answer;
         if (3 <= verbosity)
         {
             print_operand("public_key->x = ", &keys->public_key->x, "\n");
@@ -591,7 +702,40 @@ static pka_status_t submit_ecdsa_test(pka_handle_t  handle,
         rc = pka_ecdsa_signature_verify(handle, user_data_ptr, curve,
                                             base_pt, base_pt_order,
                                             keys->public_key, hash,
-                                            ecdsa_test->signature, 0); // write-back
+                                            signature, 0); // write-back
+        break;
+
+    case TEST_ECDSA_GEN_VERIFY:
+        if (first_submit)
+        {
+            if (3 <= verbosity)
+            {
+                print_operand("private_key   = ", keys->private_key, "\n");
+                print_operand("k             = ", ecdsa_test->k,     "\n");
+            }
+
+            rc = pka_ecdsa_signature_generate(handle, user_data_ptr,
+                                              curve, base_pt, base_pt_order,
+                                              keys->private_key,
+                                              ecdsa_test->hash,
+                                              ecdsa_test->k);
+        }
+        else
+        {
+            signature = ecdsa_test->signature;
+            if (3 <= verbosity)
+            {
+                print_operand("public_key->x = ", &keys->public_key->x, "\n");
+                print_operand("public_key->y = ", &keys->public_key->y, "\n");
+                print_operand("signature->r  = ", &signature->r,        "\n");
+                print_operand("signature->s  = ", &signature->s,        "\n");
+            }
+
+            rc = pka_ecdsa_signature_verify(handle, user_data_ptr, curve,
+                                            base_pt, base_pt_order,
+                                            keys->public_key, hash,
+                                            signature, 0); // write-back
+        }
         break;
 
     default:
@@ -624,25 +768,16 @@ static pka_status_t submit_dsa_test(pka_handle_t  handle,
     test_kind = (pka_test_kind_t  *) test_desc->test_kind;
     keys      = (dsa_key_system_t *) test_desc->key_system;
     dsa_test  = (test_dsa_t       *) test_desc->test_operands;
-    signature = dsa_test->signature;
     test_name = test_kind->test_name;
 
     if (3 <= verbosity)
     {
-        printf("\nRunning test_idx=%u test_name=%s\n", test_idx,
-               test_name_to_string(test_name));
+        printf("\nRunning test_idx=%u test_name=%s first_submit=%s\n", test_idx,
+               test_name_to_string(test_name), first_submit ? "true" : "false");
         print_operand("p            = ", keys->p,        "\n");
         print_operand("q            = ", keys->q,        "\n");
         print_operand("g            = ", keys->g,        "\n");
         print_operand("hash         = ", dsa_test->hash, "\n");
-    }
-
-    if (test_name == TEST_DSA_GEN_VERIFY)
-    {
-        if (first_submit)
-            test_name = TEST_DSA_GEN;
-        else
-            test_name = TEST_DSA_VERIFY;
     }
 
     switch (test_name)
@@ -660,16 +795,46 @@ static pka_status_t submit_dsa_test(pka_handle_t  handle,
         break;
 
     case TEST_DSA_VERIFY:
+        signature = dsa_test->answer;
         if (3 <= verbosity)
         {
             print_operand("public_key   = ", keys->private_key, "\n");
-            print_operand("signature->r = ", &signature->r,      "\n");
-            print_operand("signature->s = ", &signature->s,      "\n");
+            print_operand("signature->r = ", &signature->r,     "\n");
+            print_operand("signature->s = ", &signature->s,     "\n");
         }
 
         rc = pka_dsa_signature_verify(handle, user_data_ptr, keys->p, keys->q,
                                  keys->g, keys->public_key, dsa_test->hash,
-                                 dsa_test->signature, 0);
+                                 signature, 0);
+        break;
+
+    case TEST_DSA_GEN_VERIFY:
+        if (first_submit)
+        {
+            if (3 <= verbosity)
+            {
+                print_operand("private_key   = ", keys->private_key, "\n");
+                print_operand("k             = ", dsa_test->k,     "\n");
+            }
+
+            rc = pka_dsa_signature_generate(handle, user_data_ptr,
+                                            keys->p, keys->q, keys->g,
+                                            keys->private_key, dsa_test->hash,
+                                            dsa_test->k);
+        }
+        else
+        {
+            signature = dsa_test->signature;
+            if (3 <= verbosity)
+            {
+                print_operand("signature->r  = ", &signature->r,        "\n");
+                print_operand("signature->s  = ", &signature->s,        "\n");
+            }
+
+            rc = pka_dsa_signature_verify(handle, user_data_ptr, keys->p,
+                                          keys->q, keys->g, keys->public_key,
+                                          dsa_test->hash, signature, 0);
+        }
         break;
 
     default:
@@ -738,6 +903,15 @@ static __pka_noinline pka_status_t submit_pka_test(pka_handle_t  handle,
         status = submit_ecc_test(handle, user_data_ptr, test_desc, test_idx);
         break;
 
+    case TEST_ECDH:
+    case TEST_ECDHE:
+        if (test_name == TEST_ECDHE)
+            user_data_ptr->multi_submit = true;
+
+        status = submit_ecdh_test(handle, user_data_ptr, test_desc, test_idx,
+                                    first_submit);
+        break;
+
     case TEST_ECDSA_GEN:
     case TEST_ECDSA_VERIFY:
     case TEST_ECDSA_GEN_VERIFY:
@@ -763,7 +937,10 @@ static __pka_noinline pka_status_t submit_pka_test(pka_handle_t  handle,
         status = FAILURE;
     }
 
-    test_stats->num_submitted++;
+    if (first_submit)
+        test_stats->num_cmd_submits++;
+
+    test_stats->num_total_submits++;
     if (status == SUCCESS)
         test_stats->num_good_replies++;
     else
@@ -778,25 +955,47 @@ static __pka_noinline pka_status_t submit_pka_test(pka_handle_t  handle,
 static pka_status_t chk_basic_test_results(test_desc_t   *test_desc,
                                            pka_results_t *results)
 {
-    pka_operand_t *result, *answer;
-    test_basic_t  *basic;
+    pka_test_kind_t *test_kind;
+    pka_operand_t   *result, *result2, *answer, *answer2;
+    test_basic_t    *basic;
 
-    // *TBD* TEST_MOD_DIV needs two answers!
-    result = &results->results[0];
-    basic  = (test_basic_t *) test_desc->test_operands;
-    answer = basic->answer;
+    // TEST_DIV_MOD needs two answers.  Also for TEST_DIVIDE
+    // the quotient is in result2!
+    test_kind = (pka_test_kind_t *) test_desc->test_kind;
+    result    = &results->results[0];
+    result2   = &results->results[1];
+    if (test_kind->test_name == TEST_DIVIDE)
+        result = result2;
+
+    basic   = (test_basic_t *) test_desc->test_operands;
+    answer  = basic->answer;
+    answer2 = basic->answer2;
 
     if (3 <= verbosity)
     {
+        // printf("%s test_name=%s result_cnt=%u\n", __func__,
+        //        test_name_to_string(test_kind->test_name),
+        //        results->result_cnt);
         print_operand("result = ", result, "\n");
         print_operand("answer = ", answer, "\n");
+        if ((results->result_cnt > 1) && (answer2 != NULL))
+        {
+            print_operand("result2 = ", result2, "\n");
+            print_operand("answer2 = ", answer2, "\n");
+        }
     }
 
     // Compare result and answer to make sure they agree.
-    if (pki_compare(result, answer) == RC_COMPARE_EQUAL)
-        return SUCCESS;
-    else
+    if (pki_compare(result, answer) != RC_COMPARE_EQUAL)
         return FAILURE;
+    else if (test_kind->test_name != TEST_DIV_MOD)
+        return SUCCESS;
+    else if (answer2 == NULL)
+        return FAILURE;
+    else if (pki_compare(result2, answer2) != RC_COMPARE_EQUAL)
+        return FAILURE;
+    else
+        return SUCCESS;;
 }
 
 static pka_status_t chk_mod_exp_test_results(test_desc_t   *test_desc,
@@ -876,30 +1075,104 @@ static pka_status_t chk_ecc_test_results(pka_handle_t   handle,
         return FAILURE;
 }
 
+static pka_status_t chk_ecdh_test_results(pka_handle_t   handle,
+                                          test_desc_t   *test_desc,
+                                          pka_results_t *results)
+{
+    ecdh_key_system_t *ecdh_keys;
+    pka_test_kind_t   *test_kind;
+    pka_test_name_t    test_name;
+    pka_operand_t     *x_ptr, *y_ptr;
+    test_ecdh_t       *ecdh_test;
+    ecc_point_t       *answer_pt, *result_pt;
+    pka_status_t       status;
+
+    test_kind  = (pka_test_kind_t   *) test_desc->test_kind;
+    ecdh_keys  = (ecdh_key_system_t *) test_desc->key_system;
+    ecdh_test  = (test_ecdh_t       *) test_desc->test_operands;
+    test_name  = test_kind->test_name;
+    PKA_ASSERT((test_name == TEST_ECDH) || (test_name == TEST_ECDHE));
+    PKA_ASSERT(results->result_cnt == 2);
+
+    result_pt    = calloc(1, sizeof(ecc_point_t));
+    x_ptr        = dup_operand(&results->results[0]);
+    y_ptr        = dup_operand(&results->results[1]);
+    result_pt->x = *x_ptr;
+    result_pt->y = *y_ptr;
+    if (test_name == TEST_ECDH)
+        answer_pt = ecdh_test->answer;
+    else
+        answer_pt = sw_ecc_multiply(handle, ecdh_keys->curve,
+                                    ecdh_test->local_public_key,
+                                    ecdh_test->remote_private_key);
+
+    PKA_ASSERT(answer_pt != NULL);
+    if (3 <= verbosity)
+    {
+        print_operand("result_pt->x = ", &result_pt->x, "\n");
+        print_operand("result_pt->y = ", &result_pt->y, "\n");
+        print_operand("answer_pt->x = ", &answer_pt->x, "\n");
+        print_operand("answer_pt->y = ", &answer_pt->y, "\n");
+    }
+
+    if (ecc_points_are_equal(result_pt, answer_pt))
+        status = SUCCESS;
+    else
+        status = FAILURE;
+
+    if (3 <= verbosity)
+    {
+        if (status == SUCCESS)
+            printf("run_ecdh_test SUCCESS\n");
+        else
+            printf("run_ecdh_test FAILURE\n");
+    }
+
+    return status;
+}
+
 static pka_status_t chk_ecdsa_test_results(test_desc_t   *test_desc,
                                            pka_results_t *results)
 {
     pka_test_kind_t  *test_kind;
     pka_test_name_t   test_name;
-    dsa_signature_t  *signature;
+    dsa_signature_t  *answer, *signature;
     test_ecdsa_t     *ecdsa_test;
-    pka_status_t          status;
+    pka_status_t      status;
+    pka_operand_t    *r, *s;
+    uint32_t          r_buf_len, s_buf_len;
+    uint8_t          *r_buf_ptr, *s_buf_ptr;
 
     test_kind  = (pka_test_kind_t *) test_desc->test_kind;
     ecdsa_test = (test_ecdsa_t    *) test_desc->test_operands;
-    signature  = ecdsa_test->signature;
+    answer     = ecdsa_test->answer;
+    signature  = NULL;
     test_name  = test_kind->test_name;
+
+    if ((results != NULL) && (results->result_cnt == 2))
+    {
+        r = &results->results[0];
+        s = &results->results[1];
+        r_buf_ptr = r->buf_ptr;
+        r_buf_len = r->buf_len;
+        s_buf_ptr = s->buf_ptr;
+        s_buf_len = s->buf_len;
+        signature = make_dsa_signature(r_buf_ptr, r_buf_len,
+                                       s_buf_ptr, s_buf_len, true);
+    }
 
     switch (test_name)
     {
     case TEST_ECDSA_GEN:
         if (3 <= verbosity)
         {
-            print_operand("signature->r  = ", &signature->r, "\n");
-            print_operand("signature->s  = ", &signature->s, "\n");
+            print_operand("signature->r = ", &signature->r, "\n");
+            print_operand("signature->s = ", &signature->s, "\n");
+            print_operand("answer->r    = ", &answer->r, "\n");
+            print_operand("answer->s    = ", &answer->s, "\n");
         }
 
-        if (signatures_are_equal(signature, ecdsa_test->signature))
+        if (signatures_are_equal(signature, answer))
             status = SUCCESS;
         else
             status = FAILURE;
@@ -984,6 +1257,11 @@ chk_test_results(pka_handle_t     handle,
                  test_desc_t     *test_desc,
                  pka_results_t   *results)
 {
+    // check the results fields
+    if (results->results[0].big_endian > 1)
+        printf("%s: test_name=%s result[0].big_endian=%u\n", __func__,
+               test_name_to_string(test_name), results->results[0].big_endian);
+
     switch (test_name)
     {
     case TEST_ADD:
@@ -1010,6 +1288,10 @@ chk_test_results(pka_handle_t     handle,
     case TEST_ECC_MULTIPLY:
         return chk_ecc_test_results(handle, test_desc, results);
 
+    case TEST_ECDH:
+    case TEST_ECDHE:
+        return chk_ecdh_test_results(handle, test_desc, results);
+
     case TEST_ECDSA_GEN:
     case TEST_ECDSA_VERIFY:
     case TEST_ECDSA_GEN_VERIFY:
@@ -1026,15 +1308,73 @@ chk_test_results(pka_handle_t     handle,
     }
 }
 
+static void store_first_submit_results(test_desc_t    *test_desc,
+                                       pka_test_name_t test_name,
+                                       pka_results_t  *results)
+{
+    dsa_signature_t *signature;
+    pka_operand_t   *x_ptr, *y_ptr, *r, *s;
+    test_ecdsa_t    *ecdsa_test;
+    ecc_point_t     *result_pt;
+    test_ecdh_t     *ecdh_test;
+    test_dsa_t      *dsa_test;
+    uint32_t         r_buf_len, s_buf_len;
+    uint8_t         *r_buf_ptr, *s_buf_ptr;
+
+    switch (test_name)
+    {
+    case TEST_ECDHE:
+        result_pt    = calloc(1, sizeof(ecc_point_t));
+        x_ptr        = dup_operand(&results->results[0]);
+        y_ptr        = dup_operand(&results->results[1]);
+        result_pt->x = *x_ptr;
+        result_pt->y = *y_ptr;
+
+        ecdh_test                   = (test_ecdh_t *) test_desc->test_operands;
+        ecdh_test->local_public_key = result_pt;
+        break;
+
+    case TEST_ECDSA_GEN_VERIFY:
+    case TEST_DSA_GEN_VERIFY:
+        r         = &results->results[0];
+        s         = &results->results[1];
+        r_buf_ptr = r->buf_ptr;
+        r_buf_len = r->buf_len;
+        s_buf_ptr = s->buf_ptr;
+        s_buf_len = s->buf_len;
+        signature = make_dsa_signature(r_buf_ptr, r_buf_len,
+                                       s_buf_ptr, s_buf_len, true);
+
+        if (test_name == TEST_ECDSA_GEN_VERIFY)
+        {
+            ecdsa_test            = (test_ecdsa_t *) test_desc->test_operands;
+            ecdsa_test->signature = signature;
+        }
+        else
+        {
+            dsa_test            = (test_dsa_t *) test_desc->test_operands;
+            dsa_test->signature = signature;
+        }
+
+        break;
+
+    default:
+        PKA_ASSERT(false);
+    }
+}
+
 static bool process_pka_test_results(pka_handle_t   handle,
                                      pka_results_t *results,
                                      uint64_t       test_end_time)
 {
     pka_test_kind_t *test_kind;
+    pka_operand_t   *x_ptr, *y_ptr;
     test_stats_t    *test_stats;
     test_desc_t     *test_desc;
     user_data_t     *user_data_ptr;
+    test_ecdh_t     *ecdh_test;
     uint64_t         latency;
+    ecc_point_t     *result_pt;
     pka_status_t     status;
 
     user_data_ptr = (user_data_t     *) results->user_data;
@@ -1044,6 +1384,24 @@ static bool process_pka_test_results(pka_handle_t   handle,
 
     if ((user_data_ptr->multi_submit) && (user_data_ptr->first_submit))
     {
+        store_first_submit_results(test_desc, test_kind->test_name, results);
+
+        if (false) // test_kind->test_name == TEST_ECDHE)
+        {
+            ecdh_test    = (test_ecdh_t *) test_desc->test_operands;
+            result_pt    = calloc(1, sizeof(ecc_point_t));
+            x_ptr        = dup_operand(&results->results[0]);
+            y_ptr        = dup_operand(&results->results[1]);
+            result_pt->x = *x_ptr;
+            result_pt->y = *y_ptr;
+            ecdh_test->local_public_key = result_pt;
+        }
+
+        if (4  <= verbosity)
+            printf("%s: Do second submit_pka_test for test_name=%s\n", __func__,
+                   test_name_to_string(test_kind->test_name));
+
+        user_data_ptr->first_submit = false;
         submit_pka_test(handle, user_data_ptr, false);
         return false;
     }
@@ -1073,9 +1431,14 @@ static bool process_pka_test_results(pka_handle_t   handle,
 static void join_threads(uint32_t num_threads)
 {
     uint32_t thread_idx;
+    int      rc;
 
     for (thread_idx = 0; thread_idx < num_threads; thread_idx++)
-        pthread_join(threads[thread_idx], NULL);
+    {
+        rc = pthread_join(threads[thread_idx], NULL);
+        if (rc != 0)
+            printf("%s join failed with rc=%d\n", __func__, rc);
+    }
 }
 
 static void execute_tests_by_thread(uint32_t        thread_idx,
@@ -1132,10 +1495,11 @@ static void execute_tests_by_thread(uint32_t        thread_idx,
             if (num_tests <= test_desc_idx)
                 test_desc_idx = 0;
 
-            user_data_ptr->test_idx  = test_idx;
-            user_data_ptr->test_desc = test_descs[test_idx];
+            user_data_ptr->test_idx        = test_idx;
+            user_data_ptr->test_desc       = test_descs[test_idx];
             user_data_ptr->test_desc_stats =
                                     &thread_state->test_desc_stats[test_idx];
+            user_data_ptr->first_submit    = true;
             if (SUCCESS == submit_pka_test(handle, user_data_ptr, true))
             {
                 outstanding_cmds++;
@@ -1145,9 +1509,6 @@ static void execute_tests_by_thread(uint32_t        thread_idx,
             else if (failure_cnt++ > 10)
                 break;
         }
-
-        //printf("[%d] cmds_left_to_submit:%u - outstanding_cmds:%u\n",
-        //       thread_idx, cmds_left_to_submit, outstanding_cmds);
 
         if (SUCCESS == pka_get_result(handle, results))
         {
@@ -1166,7 +1527,7 @@ static void execute_tests_by_thread(uint32_t        thread_idx,
         }
 
         //printf("[%d] total_cmds_done=%u - failure_cnt=%u\n",
-        //       thread_idx, total_cmds_done, failure_cnt);
+        //      thread_idx, total_cmds_done, failure_cnt);
 
         if (failure_cnt > 10)
             break;
@@ -1189,15 +1550,24 @@ static void *pka_test_thread(void *arg)
     thread_idx     = thread_arg_ptr->thread_idx;
 
     pm_enable();
+    thread_states[thread_idx].init_cycles = pka_get_cycle_cnt();
+
+    if (1 <= verbosity)
+        printf("%s worker_cpu=%u currently running on cpu=%u\n",
+               __func__, thread_arg_ptr->cpu_number, sched_getcpu());
 
     // Wait here for all threads to be ready.
     pka_barrier_wait(&thread_start_barrier);
 
+    thread_states[thread_idx].start_cycles = pka_get_cycle_cnt();
     execute_tests_by_thread(thread_idx, &thread_states[thread_idx]);
+    thread_states[thread_idx].end_cycles = pka_get_cycle_cnt();
 
+    pka_barrier_wait(&thread_end_barrier);
     pm_disable();
 
     pka_mf();
+    thread_states[thread_idx].final_cycles = pka_get_cycle_cnt();
     return NULL;
 }
 
@@ -1251,6 +1621,9 @@ static pka_status_t create_tests (pka_handle_t handle)
     return SUCCESS;
 }
 
+pthread_t main_thread;
+uint32_t  main_thread_cpu;
+
 static int run_test(pka_handle_t handle)
 {
     pthread_attr_t attr;
@@ -1264,6 +1637,7 @@ static int run_test(pka_handle_t handle)
     if (SUCCESS != create_tests(handle))
     {
         printf("create_tests failure\n");
+        pka_term_local(handle);
         return -3;
     }
 
@@ -1272,33 +1646,61 @@ static int run_test(pka_handle_t handle)
     if (MAX_THREADS < num_of_threads)
         return -3;
 
+    pm_enable();
+
+    main_thread = pthread_self();
+    main_thread_cpu = sched_getcpu();
+    CPU_ZERO(&cpu_set);
+    CPU_SET(main_thread_cpu, &cpu_set);
+    rc = pthread_setaffinity_np(main_thread, sizeof(cpu_set_t), &cpu_set);
+
+    if (1 <= verbosity)
+        printf("%s main_thread_cpu=%u\n", __func__, main_thread_cpu);
+
+    main_init1_cycles = pka_get_cycle_cnt();
+    main_pre_barrier  = pka_get_cycle_cnt();
+
+    worker_cpu = 0;
     for (thread_idx = 0; thread_idx < num_of_threads; thread_idx++)
     {
-        worker_cpu = thread_idx % num_of_threads;
+        if (worker_cpu == main_thread_cpu)
+            worker_cpu++;
+
+        // worker_cpu = thread_idx % num_of_threads;
         CPU_ZERO(&cpu_set);
         CPU_SET(worker_cpu, &cpu_set);
         pthread_attr_init(&attr);
         pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpu_set);
 
+        thread_states[thread_idx].create_cycles = pka_get_cycle_cnt();
         thread_args[thread_idx].thread_idx = thread_idx;
         thread_args[thread_idx].cpu_number = worker_cpu;
-        rc = pthread_create(&threads[thread_idx], NULL, pka_test_thread,
+        rc = pthread_create(&threads[thread_idx], &attr, pka_test_thread,
                             &thread_args[thread_idx]);
         if (rc != 0)
         {
             printf("Error creating the server threads\n");
             break;
         }
+
+        if (1 <= verbosity)
+            printf("%s created worker thread affinitized to cpu=%lu\n", __func__,
+                   worker_cpu);
+        worker_cpu++;
     }
 
     // Next start the threads.
+    main_pre_barrier = pka_get_cycle_cnt();
     pka_barrier_wait(&thread_start_barrier);
     overall_start_time = pka_get_cycle_cnt();
-    printf("Running the tests.\n");
 
     // Wait for each thread to complete their running of the test.
+    pka_barrier_wait(&thread_end_barrier);
+
     join_threads(num_of_threads);
     overall_end_time = pka_get_cycle_cnt();
+
+    pm_disable();
     return 0;
 }
 
@@ -1341,10 +1743,10 @@ static void analyze_results (void)
         for (test_idx = 0; test_idx < num_tests; test_idx++)
         {
             test_stats  = &thread_state->test_desc_stats[test_idx];
-            num         = test_stats->num_submitted;
+            num         = test_stats->num_cmd_submits;
             bad_results = test_stats->errors;
 
-            thread_stats->num_submitted   += num;
+            thread_stats->num_cmd_submits += num;
             thread_stats->errors          += bad_results;
             thread_stats->total_latency   += test_stats->total_latency;
             thread_stats->latency_squared += test_stats->latency_squared;
@@ -1357,7 +1759,7 @@ static void analyze_results (void)
                 update_test_stats(test_stats, num);
         }
 
-        num = thread_stats->num_submitted;
+        num = thread_stats->num_cmd_submits;
 
         overall_cmds_done                  += num;
         overall_bad_results                += thread_stats->errors;
@@ -1389,6 +1791,19 @@ static void report_per_thread_results(void)
         thread_state = &thread_states[thread_idx];
         thread_stats = &thread_state->thread_stats;
 
+        if (1 <= verbosity)
+        {
+            printf("idx=%u create_cycles=%lu init=%lu start=%lu end=%lu final=%lu\n",
+                   thread_idx, thread_state->create_cycles, thread_state->init_cycles,
+                   thread_state->start_cycles, thread_state->end_cycles,
+                   thread_state->final_cycles);
+            printf("        init_rel=%lu start_rel=%lu end_rel=%lu final_rel=%lu\n",
+                   thread_state->init_cycles  - thread_state->create_cycles,
+                   thread_state->start_cycles - thread_state->init_cycles,
+                   thread_state->end_cycles   - thread_state->start_cycles,
+                   thread_state->final_cycles - thread_state->end_cycles);
+        }
+
         // Only report per thread per test stats if the num_tests is > 1.
         if (1 < num_tests)
         {
@@ -1396,7 +1811,7 @@ static void report_per_thread_results(void)
             {
                 test_stats   = &thread_state->test_desc_stats[test_idx];
                 bad_results  = test_stats->errors;
-                num_cmds     = test_stats->num_submitted;
+                num_cmds     = test_stats->num_cmd_submits;
 
                 printf("    thread_idx=%u test_idx=%u num=%u errors=%u min=%u "
                        "avg=%u max=%u std_dev=%u (usecs)\n",
@@ -1411,7 +1826,7 @@ static void report_per_thread_results(void)
         microsecs64  = (1000000 * thread_state->thread_cycles) / cpu_freq;
         millisecs64  = microsecs64 / 1000;
         usecs_rem    = (uint32_t) (microsecs64 - (millisecs64 * 1000));
-        num_cmds     = thread_stats->num_submitted;
+        num_cmds     = thread_stats->num_cmd_submits;
         cmds_per_sec = (uint32_t) ((1000000 * (uint64_t) num_cmds) /
                                    microsecs64);
 
@@ -1458,6 +1873,10 @@ static void report_results(uint64_t total_time_cycles, uint32_t num_threads)
                (uint32_t) overall_test_stats.max_latency,
                (uint32_t) overall_test_stats.latency_std_dev);
 
+    if (1 <= verbosity)
+        printf("  main_init1=%lu main_pre_barrier=%lu overall_start=%lu overall_end=%lu\n",
+               main_init1_cycles, main_pre_barrier, overall_start_time, overall_end_time);
+
     if (report_thread_stats)
     {
         printf("\nPer Thread Per Test results:\n");
@@ -1485,7 +1904,7 @@ static void print_usage(char *progname)
     printf("     ADD, SUBTRACT, MULTIPLY, DIVIDE, DIV_MOD, MODULO\n");
     printf("     SHIFT_LEFT, SHIFT_RIGHT, MOD_INVERT\n");
     printf("     MOD_EXP, RSA_MOD_EXP, RSA_VERIFY, RSA_MOD_EXP_WITH_CRT\n");
-    printf("     ECC_ADD, ECC_DOUBLE, ECC_MULTIPLY\n");
+    printf("     ECC_ADD, ECC_DOUBLE, ECC_MULTIPLY, ECDH, ECDHE,\n");
     printf("     ECDSA_GEN, ECDSA_VERIFY, ECDSA_GEN_VERIFY\n");
     printf("     DSA_GEN, DSA_VERIFY, DSA_GEN_VERIFY\n\n");
     printf("The default command line options (except for -b and -s) are:\n");
@@ -1493,10 +1912,10 @@ static void print_usage(char *progname)
     printf("The defaults for '-b' and '-s' depend upon the test name (as \n");
     printf("given by '-c') as follows:\n");
     printf("a) the default for '-b' is 1024 for all tests except\n");
-    printf("   for the ECC_* tests and ECDSA_* tests when it is 256.\n");
-    printf("b) the default for -s is 33 for RSA_VERIFY, 'bit_len - 1'\n");
-    printf("   for DIVIDE, DIV_MOD, MODULO, and DSA_* tests, 'bit_len / 2'\n");
-    printf("   for the ECDSA_* tests and unused for for all other tests.\n\n");
+    printf("   for the ECC_* tests, ECDH* and ECDSA_* tests when it is 256.\n");
+    printf("b) the default for -s is 17 for RSA_VERIFY, 'bit_len - 1'\n");
+    printf("   for DIVIDE, DIV_MOD, MODULO, and DSA_* tests\n");
+    printf("   for for all other tests.\n\n");
 }
 
 static pka_status_t process_options(int argc, char *argv[])
@@ -1742,20 +2161,26 @@ int main (int argc, char *argv[])
         case TEST_DIVIDE:
         case TEST_DIV_MOD:
         case TEST_MODULO:
-        case TEST_DSA_GEN:
-        case TEST_DSA_VERIFY:
-        case TEST_DSA_GEN_VERIFY:
             test_kind.second_bit_len = test_kind.bit_len - 1;
             break;
 
-        case TEST_ECDSA_GEN:
-        case TEST_ECDSA_VERIFY:
-        case TEST_ECDSA_GEN_VERIFY:
-            test_kind.second_bit_len = test_kind.bit_len / 2;
+        case TEST_DSA_GEN:
+        case TEST_DSA_VERIFY:
+        case TEST_DSA_GEN_VERIFY:
+            if (test_kind.bit_len == 1024)
+                test_kind.second_bit_len = 160;
+            else if (test_kind.bit_len == 2048)
+                test_kind.second_bit_len = 224;
+            else if (test_kind.bit_len == 3072)
+                test_kind.second_bit_len = 256;
+            else if (test_kind.bit_len >= 1024)
+                test_kind.second_bit_len = 256;
+            else
+                test_kind.second_bit_len = test_kind.bit_len / 4;
             break;
 
         case TEST_RSA_VERIFY:
-            test_kind.second_bit_len = 33;
+            test_kind.second_bit_len = 17;
             break;
 
         default:
@@ -1778,7 +2203,9 @@ int main (int argc, char *argv[])
            report_thread_stats ? "will" : "will not", verbosity);
 
     // Init PKA before calling anything else
-    flags         = PKA_F_PROCESS_MODE_MULTI | PKA_F_SYNC_MODE_ENABLE;
+    flags         = PKA_F_PROCESS_MODE_SINGLE;
+    flags        |= (num_of_threads > 1) ?
+                        PKA_F_SYNC_MODE_ENABLE : PKA_F_SYNC_MODE_DISABLE;
     cmd_queue_sz  = PKA_MAX_OBJS * PKA_CMD_DESC_MAX_DATA_SIZE;
     rslt_queue_sz = PKA_MAX_OBJS * PKA_RSLT_DESC_MAX_DATA_SIZE;
     pka_test_instance = pka_init_global(NO_PATH(argv[0]), flags, num_of_rings,
@@ -1799,6 +2226,7 @@ int main (int argc, char *argv[])
 
     init_test_utils(handle);
     pka_barrier_init(&thread_start_barrier, num_of_threads + 1);
+    pka_barrier_init(&thread_end_barrier,   num_of_threads + 1);
 
     return_code = run_test(handle);
     analyze_results();

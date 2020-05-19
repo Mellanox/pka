@@ -232,6 +232,34 @@ static void pka_dev_unset_resource_config(pka_dev_shim_t *shim,
     res_ptr->status = PKA_DEV_RES_STATUS_UNMAPPED;
 }
 
+int pka_dev_clear_ring_counters(pka_dev_ring_t *ring)
+{
+    pka_dev_shim_t *shim;
+    pka_dev_res_t  *master_seq_ctrl_ptr;
+    void           *master_reg_ptr;
+    uint64_t        master_reg_base, master_reg_off;
+
+    shim = ring->shim;
+    master_seq_ctrl_ptr = &shim->resources.master_seq_ctrl;
+    master_reg_base = master_seq_ctrl_ptr->base;
+    master_reg_ptr  = master_seq_ctrl_ptr->ioaddr;
+    master_reg_off  = pka_dev_get_register_offset(master_reg_base,
+                                                    PKA_MASTER_SEQ_CTRL_ADDR);
+
+    // push the EIP-154 master controller into reset.
+    pka_dev_io_write(master_reg_ptr, master_reg_off,
+                            PKA_MASTER_SEQ_CTRL_RESET_VAL);
+
+    // clear counters.
+    pka_dev_io_write(master_reg_ptr, master_reg_off,
+                        PKA_MASTER_SEQ_CTRL_CLEAR_COUNTERS_VAL);
+
+    // take the EIP-154 master controller out of reset.
+    pka_dev_io_write(master_reg_ptr, master_reg_off, 0);
+
+    return 0;
+}
+
 // Initialize ring. Set ring parameters and configure ring resources.
 // It returns 0 on success, a negative error code on failure.
 static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
@@ -1731,7 +1759,7 @@ int pka_dev_get_ring_info(pka_ring_info_t *ring_info)
         return -EINVAL;
 
     // Get ring parameters
-    ret = ioctl(ring_info->fd, PKA_VFIO_GET_RING_INFO, &hw_ring_info);
+    ret = ioctl(ring_info->fd, PKA_GET_RING_INFO, &hw_ring_info);
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to get ring information\n");
@@ -1920,13 +1948,9 @@ int __pka_dev_open_ring(uint32_t ring_id)
 }
 #endif
 
-// Open ring.
-int pka_dev_open_ring(pka_ring_info_t *ring_info)
+#ifndef __KERNEL__
+static int pka_dev_open_ring_vfio(pka_ring_info_t *ring_info)
 {
-#ifdef __KERNEL__
-    return __pka_dev_open_ring(ring_info->ring_id);
-#else
-
     struct vfio_group_status  group_status;
 
     char  file[32];
@@ -2003,13 +2027,42 @@ int pka_dev_open_ring(pka_ring_info_t *ring_info)
     ring_info->fd = ioctl(ring_info->group, VFIO_GROUP_GET_DEVICE_FD,
                                 ring_name);
     if (ring_info->fd < 0)
-    {
         PKA_ERROR(PKA_DEV, "failed to get file descriptor for ring %d\n",
                     ring_info->ring_id);
-        return error;
-    }
 
-    return 0;
+    return ring_info->fd;
+}
+
+static int pka_dev_open_ring_file(pka_ring_info_t *ring_info)
+{
+    char file[32];
+
+    // Invalidate the group
+    ring_info->group = -EINVAL;
+
+    snprintf(file, sizeof(file), PKA_DEVFS_RING_DEVICES, ring_info->ring_id);
+    ring_info->fd = open(file, O_RDWR);
+    if (ring_info->fd < 0)
+        PKA_DEBUG(PKA_DEV,
+                  "cannot open the PKA ring %d\n",
+                    ring_info->ring_id);
+    return ring_info->fd;
+}
+#endif
+
+// Open ring.
+int pka_dev_open_ring(pka_ring_info_t *ring_info)
+{
+#ifdef __KERNEL__
+    return __pka_dev_open_ring(ring_info->ring_id);
+#else
+    int fd;
+
+    fd = pka_dev_open_ring_file(ring_info);
+    if (fd < 0)
+        fd = pka_dev_open_ring_vfio(ring_info);
+
+    return (fd < 0) ? fd : 0;
 #endif
 }
 
@@ -2057,7 +2110,8 @@ int pka_dev_close_ring(pka_ring_info_t *ring_info)
         close(ring_info->fd);
 
         // Close ring group.
-        close(ring_info->group);
+        if (!(ring_info->group < 0))
+            close(ring_info->group);
 #endif
     }
 
@@ -2088,7 +2142,7 @@ int pka_dev_mmap_ring(pka_ring_info_t *ring_info)
         return -EINVAL;
 
     // Get ring region information
-    ret = ioctl(ring_info->fd, PKA_VFIO_GET_REGION_INFO, &region_info);
+    ret = ioctl(ring_info->fd, PKA_RING_GET_REGION_INFO, &region_info);
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to get ring region info\n");
