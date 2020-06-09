@@ -104,6 +104,8 @@ typedef pka_result_code_t (* shift_fcn_t) (pka_handle_t   hdl,
 #define ECDSA_VERIFY                     pka_ecdsa_signature_verify
 #define DSA_GENERATE                     pka_dsa_signature_generate
 #define DSA_VERIFY                       pka_dsa_signature_verify
+#define ECDH                             pka_ecdh
+#define DH                               pka_dh
 
 static pka_operand_t   *test_operands[200];
 static ecc_point_t     *test_ecc_points[100];
@@ -897,6 +899,58 @@ static void ShiftTest(thread_args_t *args,
     TestFailed(args, __func__, pki_fcn_name, &operand, 1, rc, result, correct);
 }
 
+static void DhTest(thread_args_t *args,
+                   uint32_t       value_idx,
+                   uint32_t       exponent_idx,
+                   uint32_t       modulus_idx,
+                   uint32_t       correct_idx)
+{
+    pka_operand_t      *value, *exponent, *modulus, *correct, *result, *inputs[3];
+    pka_results_t       results;
+    pka_result_code_t   rc;
+    pka_cmp_code_t      cmp;
+    uint8_t             res_buf[MAX_BUF];
+
+    value    = test_operands[value_idx];
+    exponent = test_operands[exponent_idx];
+    modulus  = test_operands[modulus_idx];
+    correct  = test_operands[correct_idx];
+
+    rc = DH(args->handle, args->user_data, exponent, modulus, value);
+    if (rc != RC_NO_ERROR)
+    {
+        inputs[0] = value;
+        inputs[1] = exponent;
+        inputs[2] = modulus;
+        CmdFailed(args, __func__, "pka_dh", inputs, 3, rc);
+        return;
+    }
+
+    memset(&results, 0, sizeof(pka_results_t));
+    init_operand(&results.results[0], &res_buf[0], MAX_BUF, 0);
+    result = &results.results[0];
+
+    if (pka_request_count(args->handle))
+    {
+        while(FAILURE == pka_get_result(args->handle, &results));
+        // We should define a timer here, so that we don't get stuck
+        // indefinitely when the test fails to retrieve a result.
+        if (rc == RC_NO_ERROR)
+        {
+            cmp = pki_compare(result, correct);
+            if (cmp == RC_COMPARE_EQUAL)
+            {
+                args->tests_passed++;
+                return;
+            }
+        }
+    }
+
+    inputs[0] = value;
+    inputs[1] = exponent;
+    inputs[2] = modulus;
+    TestFailed(args, __func__, "pka_dh", inputs, 3, rc, result, correct);
+}
 static void ModExpTest(thread_args_t *args,
                        char          *pki_fcn_name,
                        uint32_t       value_idx,
@@ -1104,6 +1158,59 @@ static void EccMultiplyTest(thread_args_t *args,
     inputs[1] = &pointA->y;
     inputs[2] = multiplier;
     EccTestFailed(args, __func__, "pka_ecc_multiply", curve, inputs, 3,
+                  rc, &result, correct);
+}
+
+static void EcdhTest(thread_args_t *args,
+                     ecc_curve_t   *curve,
+                     uint32_t       point_idx,
+                     uint32_t       private_key_idx,
+                     uint32_t       correct_idx)
+{
+    pka_operand_t       *private_key, *inputs[3];
+    pka_result_code_t    rc;
+    ecc_point_t         *point, *correct, result;
+    pka_results_t        results;
+    uint8_t              x_buf[MAX_BUF], y_buf[MAX_BUF];
+
+    point       = test_ecc_points[point_idx];
+    private_key = test_operands[private_key_idx];
+    correct     = test_ecc_points[correct_idx];
+
+    rc = ECDH(args->handle, args->user_data, curve, point, private_key);
+    if (rc != RC_NO_ERROR)
+    {
+        inputs[0] = &point->x;
+        inputs[1] = &point->y;
+        inputs[2] = private_key;
+        CmdFailed(args, __func__, "pka_ecdh", inputs, 3, rc);
+        return;
+    }
+
+    memset(&results, 0, sizeof(pka_results_t));
+    init_operand(&results.results[0], &x_buf[0], MAX_BUF, 0);
+    init_operand(&results.results[1], &y_buf[0], MAX_BUF, 0);
+    if (pka_request_count(args->handle))
+    {
+        while(FAILURE == pka_get_result(args->handle, &results));
+        // We should define a timer here, so that we don't get stuck
+        // indefinitely when the test fails to retrieve a result.
+        result.x = results.results[0];
+        result.y = results.results[1];
+        if (rc == RC_NO_ERROR)
+        {
+            if (ecc_points_are_equal(&result, correct))
+            {
+                args->tests_passed++;
+                return;
+            }
+        }
+    }
+
+    inputs[0] = &point->x;
+    inputs[1] = &point->y;
+    inputs[2] = private_key;
+    EccTestFailed(args, __func__, "pka_ecdh", curve, inputs, 3,
                   rc, &result, correct);
 }
 
@@ -1376,6 +1483,14 @@ void TestPkaModExp(thread_args_t *args)
     ModExpWithCrtTest(args, RSA1024, 26, 25);
 }
 
+void TestPkaDh(thread_args_t *args)
+{
+    // Note here that the test operand and result idx are same as that for
+    // one of the ModExp test above. This is because Dh is based on 
+    // Modular Exponentiation without CRT.
+    DhTest(args, 178, 179, 180, 181);
+}
+
 void TestPkaEccAdd(thread_args_t *args)
 {
     EccAddTest(args, P256, 1, 4, 10);
@@ -1391,6 +1506,14 @@ void TestPkaEccMultiply(thread_args_t *args)
     EccMultiplyTest(args, P256, 4, 5,  20);
     EccMultiplyTest(args, P256, 5, 6,  21);
     // EccMultiplyTest(P256, 6, 10, 3);
+}
+
+void TestPkaEcdh(thread_args_t *args)
+{
+    // Note here that the test operand and result idx are same as that for
+    // Ecc multiply test above. This is because Ecdh is based on 
+    // Ecc point multiplication.
+    EcdhTest(args, P256, 4, 2, 13);
 }
 
 void TestEcdsa(thread_args_t *args)
@@ -1427,6 +1550,9 @@ void SingleThreadTestAll(thread_args_t *args)
     // Modular exponentiation tests:
     TestPkaModExp(args); //Need new operands (assert!)
 
+    // Diffie-Hellman tests:
+    TestPkaDh(args);
+
     // Basic ECC tests:
     TestPkaEccAdd(args);
     TestPkaEccMultiply(args);
@@ -1436,6 +1562,9 @@ void SingleThreadTestAll(thread_args_t *args)
 
     // DSA tests:
     TestDsa(args);
+
+    // ECDH tests:
+    TestPkaEcdh(args);
 }
 
 static void *thread_start_routine(void *arg)
