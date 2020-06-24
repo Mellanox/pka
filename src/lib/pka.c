@@ -1560,6 +1560,15 @@ static pka_comparison_t pka_internal_compare(uint8_t *value_buf_ptr,
     return PKA_EQUAL;
 }
 
+int pka_dh(pka_handle_t   handle,
+           void          *user_data,
+           pka_operand_t *private_key,
+           pka_operand_t *modulus,
+           pka_operand_t *value)
+{
+    return pka_modular_exp(handle, user_data, private_key, modulus, value);
+}
+
 int pka_modular_exp(pka_handle_t   handle,
                     void          *user_data,
                     pka_operand_t *exponent,
@@ -1878,6 +1887,15 @@ int pka_ecc_pt_mult(pka_handle_t   handle,
     // too expensive for now.
 
     return pka_submit_cmd(handle, user_data, CC_ECC_PT_MULTIPLY, &operands);
+}
+
+int pka_ecdh(pka_handle_t   handle,
+             void*          user_data,
+             ecc_curve_t   *curve,
+             ecc_point_t   *point,
+             pka_operand_t *private_key)
+{
+	return pka_ecc_pt_mult(handle, user_data, curve, point, private_key);
 }
 
 int pka_ecdsa_signature_generate(pka_handle_t   handle,

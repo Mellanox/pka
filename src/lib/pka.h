@@ -574,6 +574,27 @@ int pka_shift_right(pka_handle_t   handle,
                     pka_operand_t* value,
                     uint32_t       shift_cnt);
 
+/// Traditional Diffie-Hellman(DH).
+///
+/// This function provide Diffie-Hellman algorithm implementation,
+/// which is essentially nothing but Modular Exponentiation without CRT.
+///
+/// @param handle      An initialized PKA handle to use for this command.
+/// @param user_data   Opaque user pointer that is returned with the result.
+/// @param private_key The big integer exponent, which is always the local private
+///                    key in case of DH.
+/// @param modulus     The big integer modulus. Must be an odd prime (i.e. the
+///                    LSB must be ONE). Must be larger than 2^32 (5 bytes).
+/// @param value       The big integer whose modular power is requested. Must
+///                    be inferior to the 'modulus'.
+///
+/// @return            0 on success, a negative error code on failure.
+int pka_dh(pka_handle_t   handle,
+           void*          user_data,
+           pka_operand_t* private_key,
+           pka_operand_t* modulus,
+           pka_operand_t* value);
+
 /// Modular Exponentiation function without Chinese Remainder Theorem (CRT).
 ///
 /// This function implements the mathematical expression
@@ -853,6 +874,31 @@ int pka_ecc_pt_mult(pka_handle_t   handle,
                     ecc_curve_t*   curve,
                     ecc_point_t*   pointA,
                     pka_operand_t* multiplier);
+
+/// Elliptic Curve Diffie-Hellman (ECDH).
+///
+/// ECDH is based on ECC point multiplication and essentially uses the
+/// API of the same. 
+///
+/// @note Elliptic curves using a modulus of 2^m are NOT supported.
+///
+/// @param handle      An initialized PKA handle to use for this command.
+/// @param user_data   Opaque user pointer that is returned with the result.
+/// @param curve       A pointer to an ecc_curve_t object, which supplies the
+///                    curve parameters a, b, and p where p must be prime.
+/// @param point       A pointer to an ecc_point_t object, which supplies the
+///                    x and y coordinates (as big integer) for the first point.
+///                    This is either a base point for the curve or remote public key. 
+/// @param private_key big integer indicating the number of times that point
+///                    should be added to itself. In case of ECDH this the local
+///                    private key.
+///
+/// @return            0 on success, a negative error code on failure.
+int pka_ecdh(pka_handle_t   handle,
+             void*          user_data,
+             ecc_curve_t*   curve,
+             ecc_point_t*   point,
+             pka_operand_t* private_key);
 
 /// Elliptic Curve DSA (ECSDA) Signature Generation.
 ///

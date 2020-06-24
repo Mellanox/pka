@@ -584,8 +584,8 @@ static pka_status_t submit_ecdh_test(pka_handle_t  handle,
             print_operand("local_public_key->y  = ", &local_public_key->y, "\n");
         }
 
-        rc = pka_ecc_pt_mult(handle, user_data_ptr, curve, remote_public_key,
-                                local_private_key);
+        rc = pka_ecdh(handle, user_data_ptr, curve, remote_public_key,
+                      local_private_key);
         break;
 
     case TEST_ECDHE:
@@ -597,8 +597,8 @@ static pka_status_t submit_ecdh_test(pka_handle_t  handle,
             local_private_key = rand_non_zero_integer(handle, base_pt_order);
             ecdh_test->local_private_key = local_private_key;
 
-            rc = pka_ecc_pt_mult(handle, user_data_ptr, curve,
-                                    base_pt, local_private_key);
+            rc = pka_ecdh(handle, user_data_ptr, curve, base_pt,
+                          local_private_key);
         }
         else
         {
@@ -617,8 +617,8 @@ static pka_status_t submit_ecdh_test(pka_handle_t  handle,
 
             // Now determine the shared secret by multiplying the remote public
             // key by our newly created local private key.
-            rc = pka_ecc_pt_mult(handle, user_data_ptr, curve,
-                                    remote_public_key, local_private_key);
+            rc = pka_ecdh(handle, user_data_ptr, curve,
+                          remote_public_key, local_private_key);
         }
         break;
 
