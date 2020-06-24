@@ -549,10 +549,10 @@ static void pka_release_engine(void)
 // API
 //
 
-int pka_rsa_mod_exp(pka_bignum_t *bn_value,
-                    pka_bignum_t *bn_exponent,
-                    pka_bignum_t *bn_modulus,
-                    pka_bignum_t *bn_result)
+int pka_bn_mod_exp(pka_bignum_t *bn_value,
+                   pka_bignum_t *bn_exponent,
+                   pka_bignum_t *bn_modulus,
+                   pka_bignum_t *bn_result)
 {
     pka_operand_t     *value, *exponent, *modulus, *result;
     int                rc;

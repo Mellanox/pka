@@ -97,10 +97,10 @@ int pka_finish(void);
 
 // This function implements the modular exponentiation using BlueField
 // PKA hardware.
-int pka_rsa_mod_exp(pka_bignum_t *bn_value,
-                    pka_bignum_t *bn_exponent,
-                    pka_bignum_t *bn_modulus,
-                    pka_bignum_t *bn_result);
+int pka_bn_mod_exp(pka_bignum_t *bn_value,
+                   pka_bignum_t *bn_exponent,
+                   pka_bignum_t *bn_modulus,
+                   pka_bignum_t *bn_result);
 
 // This function implements the modular exponentiation with CRT using
 // BlueField PKA hardware.

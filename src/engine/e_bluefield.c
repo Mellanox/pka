@@ -14,6 +14,7 @@
 
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
+#include <openssl/dh.h>
 #include <openssl/evp.h>
 #include <openssl/bn.h>
 #include <openssl/crypto.h>
@@ -40,19 +41,38 @@ static int engine_pka_init(ENGINE *e);
 static int engine_pka_finish(ENGINE *e);
 void engine_load_pka_int(void);
 
+/* BN operations */
+/* BN mod_exp */
+static int engine_pka_bn_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
+                                 const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx);
+
+# if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 /* RSA stuff */
 #ifndef NO_RSA
 static int engine_pka_rsa_mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa,
                                     BN_CTX *ctx);
-static int engine_pka_bn_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
-                            const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx);
 
 static int engine_pka_rsa_init(RSA *rsa);
 static int engine_pka_rsa_finish(RSA *rsa);
 
-# if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 static RSA_METHOD *pka_rsa_meth = NULL;
-# else
+#endif
+
+/* DSA stuff */
+/* DH stuff */
+#ifndef NO_DH
+static int engine_pka_dh_bn_mod_exp(const DH *dh, BIGNUM *r, const BIGNUM *a,
+                                    const BIGNUM *p, const BIGNUM *m,
+                                    BN_CTX *ctx, BN_MONT_CTX *m_ctx);
+static int engine_pka_dh_init(DH *dh);
+static int engine_pka_dh_finish(DH *dh);
+static DH_METHOD *pka_dh_meth = NULL;
+#endif
+/* EC stuff */
+/* rand stuff */
+# else // OpenSSL >=1.0.0 && < 1.0.1
+/* RSA stuff */
+#ifndef NO_RSA
 static RSA_METHOD pka_rsa_meth = {
     "BlueField RSA method",
     NULL,
@@ -69,20 +89,33 @@ static RSA_METHOD pka_rsa_meth = {
     NULL,
     NULL
 };
-# endif
 #endif
 
 /* DSA stuff */
 /* DH stuff */
+#ifndef NO_DH
+static DH_METHOD pka_dh_meth = {
+    "BlueField DH method",
+    NULL,
+    NULL,
+    engine_pka_dh_bn_mod_exp,
+    engine_pka_dh_init,
+    engine_pka_dh_finish,
+    0,
+    NULL,
+    NULL
+};
+#endif
 /* EC stuff */
 /* rand stuff */
+# endif
 
 static int bind_pka(ENGINE *e)
 {
     int rc = 1;
 
-#ifndef NO_RSA
 # if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+#ifndef NO_RSA
     /* Setup our RSA_METHOD that we provide pointers to */
     if ((pka_rsa_meth = RSA_meth_new("BlueField RSA method", 0)) == NULL
         || rc != RSA_meth_set_mod_exp(pka_rsa_meth, engine_pka_rsa_mod_exp)
@@ -109,7 +142,36 @@ static int bind_pka(ENGINE *e)
         printf("ERROR: failed to hook PKCS1_SSLeay() functions\n");
         return 0;
     }
-# else
+#endif
+
+    /* Setup our DSA_METHOD that we provide pointers to */
+#ifndef NO_DH
+    /* Setup our DH_METHOD that we provide pointers to */
+    if ((pka_dh_meth = DH_meth_new("BlueField DH method", 0)) == NULL
+        || rc != DH_meth_set_bn_mod_exp(pka_dh_meth, engine_pka_dh_bn_mod_exp)
+        || rc != DH_meth_set_init(pka_dh_meth, engine_pka_dh_init)
+        || rc != DH_meth_set_finish(pka_dh_meth, engine_pka_dh_finish))
+    {
+        printf("ERROR: failed to setup BlueField DH method\n");
+        return 0;
+    }
+
+    /*
+     * We know that the "DH_OpenSSL()" functions hook properly
+     * to the bluefield-specific engine_pka_rsa_mod_exp so we use
+     * those functions.
+     */
+    const DH_METHOD *dh_meth  = DH_OpenSSL();
+    rc   &= DH_meth_set_generate_key(pka_dh_meth, DH_meth_get_generate_key(dh_meth));
+    rc   &= DH_meth_set_compute_key(pka_dh_meth, DH_meth_get_compute_key(dh_meth));
+    if (!rc)
+    {
+        printf("ERROR: failed to hook DH_OpenSSL() functions\n");
+        return 0;
+    }
+#endif
+# else // OpenSSL >=1.0.0 && < 1.0.1
+#ifndef NO_RSA
     /*
      * We know that the "RSA_PKCS1_SSLeay()" functions hook properly
      * to the bluefield-specific engine_pka_rsa_mod_exp so we use
@@ -120,23 +182,41 @@ static int bind_pka(ENGINE *e)
     pka_rsa_meth.rsa_pub_dec = meth->rsa_pub_dec;
     pka_rsa_meth.rsa_priv_enc = meth->rsa_priv_enc;
     pka_rsa_meth.rsa_priv_dec = meth->rsa_priv_dec;
-# endif
 #endif
 
     /* Setup our DSA_METHOD that we provide pointers to */
     /* Setup our DH_METHOD that we provide pointers to */
+#ifndef NO_DH
+    /*
+     * We know that the "DH_OpenSSL()" functions hook properly
+     * to the bluefield-specific engine_pka_dh_bn_mod_exp so we use
+     * those functions.
+     */
+    const DH_METHOD *dh_meth = DH_OpenSSL();
+    pka_dh_meth.generate_key = dh_meth->generate_key;
+    pka_dh_meth.compute_key  = dh_meth->compute_key;
+#endif
     /* Setup our EC_KEY_METHOD that we provide pointers to */
     /* Setup our RAND_METHOD that we provide pointers to */
+# endif
 
     if (rc != ENGINE_set_id(e, engine_pka_id)
         || rc != ENGINE_set_name(e, engine_pka_name)
-#ifndef NO_RSA
 # if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+#ifndef NO_RSA
         || rc != ENGINE_set_RSA(e, pka_rsa_meth)
-# else
-        || rc != ENGINE_set_RSA(e, &pka_rsa_meth)
-# endif
 #endif
+#ifndef NO_DH
+        || rc != ENGINE_set_DH(e, pka_dh_meth)
+#endif
+# else // OpenSSL >=1.0.0 && < 1.0.1
+#ifndef NO_RSA
+        || rc != ENGINE_set_RSA(e, &pka_rsa_meth)
+#endif
+#ifndef NO_DH
+        || rc != ENGINE_set_DH(e, &pka_dh_meth)
+#endif
+# endif
         || rc != ENGINE_set_destroy_function(e, engine_pka_destroy)
         || rc != ENGINE_set_init_function(e, engine_pka_init)
         || rc != ENGINE_set_finish_function(e, engine_pka_finish))
@@ -195,9 +275,50 @@ static int engine_pka_finish(ENGINE *e)
 static int engine_pka_destroy(ENGINE *e)
 {
 #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+#ifndef NO_RSA
     RSA_meth_free(pka_rsa_meth);
 #endif
+#ifndef NO_DH
+    DH_meth_free(pka_dh_meth);
+#endif
+#endif
     return 1;
+}
+
+/* BN operations */
+
+/* BN_mod_exp */
+/* This function is aliased to mod_exp (with the mont stuff dropped). */
+static int
+engine_pka_bn_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
+                      const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx)
+{
+    BIGNUM *result;
+    int     rc, result_bit_len;
+
+    rc = 0;
+
+    result         = BN_new();
+    result_bit_len = BN_num_bits(m);
+
+    /* Expand the result bn so that it can hold our big num */
+    if (!BN_lshift(result, result, result_bit_len))
+    {
+        printf("ERROR: bn_mod_exp failed to expand RSA result component\n");
+        goto end;
+    }
+
+    rc = pka_bn_mod_exp((pka_bignum_t *) a,
+                        (pka_bignum_t *) p,
+                        (pka_bignum_t *) m,
+                        (pka_bignum_t *) result);
+
+    if (!rc || BN_copy(r, result) == NULL)
+        rc = 0;
+
+end:
+    BN_free(result);
+    return rc;
 }
 
 #ifndef NO_RSA
@@ -241,10 +362,10 @@ engine_pka_rsa_mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx)
         }
         else if (d)
         {
-            rc = pka_rsa_mod_exp((pka_bignum_t *) I,
-                                 (pka_bignum_t *) d,
-                                 (pka_bignum_t *) n,
-                                 (pka_bignum_t *) result);
+            rc = pka_bn_mod_exp((pka_bignum_t *) I,
+                                (pka_bignum_t *) d,
+                                (pka_bignum_t *) n,
+                                (pka_bignum_t *) result);
         }
 # else
     if (rsa->n != NULL)
@@ -272,10 +393,10 @@ engine_pka_rsa_mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa, BN_CTX *ctx)
         }
         else if (rsa->d)
         {
-            rc = pka_rsa_mod_exp((pka_bignum_t *) I,
-                                 (pka_bignum_t *) rsa->d,
-                                 (pka_bignum_t *) rsa->n,
-                                 (pka_bignum_t *) result);
+            rc = pka_bn_mod_exp((pka_bignum_t *) I,
+                                (pka_bignum_t *) rsa->d,
+                                (pka_bignum_t *) rsa->n,
+                                (pka_bignum_t *) result);
         }
 # endif
         else
@@ -298,45 +419,33 @@ end:
     return rc;
 }
 
-/* This function is aliased to mod_exp (with the mont stuff dropped). */
-static int
-engine_pka_bn_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
-                      const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx)
-{
-    BIGNUM *result;
-    int     rc, result_bit_len;
-
-    rc = 0;
-
-    result         = BN_new();
-    result_bit_len = BN_num_bits(m);
-
-    /* Expand the result bn so that it can hold our big num */
-    if (!BN_lshift(result, result, result_bit_len))
-    {
-        printf("ERROR: bn_mod_exp failed to expand RSA result component\n");
-        goto end;
-    }
-
-    rc = pka_rsa_mod_exp((pka_bignum_t *) a,
-                         (pka_bignum_t *) p,
-                         (pka_bignum_t *) m,
-                         (pka_bignum_t *) result);
-
-    if (!rc || BN_copy(r, result) == NULL)
-        rc = 0;
-
-end:
-    BN_free(result);
-    return rc;
-}
-
 static int engine_pka_rsa_init(RSA *rsa)
 {
     return pka_init();
 }
 
 static int engine_pka_rsa_finish(RSA *rsa)
+{
+    return pka_finish();
+}
+#endif
+
+/* DSA implementation */
+/* DH implementation */
+#ifndef NO_DH
+static int
+engine_pka_dh_bn_mod_exp(const DH *dh, BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
+                         const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx)
+{
+    return engine_pka_bn_mod_exp(r, a, p, m, ctx, m_ctx);
+}
+
+static int engine_pka_dh_init(DH *dh)
+{
+    return pka_init();
+}
+
+static int engine_pka_dh_finish(DH *dh)
 {
     return pka_finish();
 }
