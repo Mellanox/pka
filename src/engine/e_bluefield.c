@@ -14,6 +14,7 @@
 
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
+#include <openssl/dsa.h>
 #include <openssl/dh.h>
 #include <openssl/evp.h>
 #include <openssl/bn.h>
@@ -59,6 +60,19 @@ static RSA_METHOD *pka_rsa_meth = NULL;
 #endif
 
 /* DSA stuff */
+#ifndef NO_DSA
+static int engine_pka_dsa_mod_exp(DSA *dsa, BIGNUM *rr, const BIGNUM *a1,
+                                  const BIGNUM *p1, const BIGNUM *a2,
+                                  const BIGNUM *p2, const BIGNUM *m,
+                                  BN_CTX *ctx, BN_MONT_CTX *in_mont);
+static int engine_pka_dsa_bn_mod_exp(DSA *dsa, BIGNUM *r, const BIGNUM *a,
+                                     const BIGNUM *p, const BIGNUM *m,
+                                     BN_CTX *ctx, BN_MONT_CTX *m_ctx);
+static int engine_pka_dsa_init(DSA *dsa);
+static int engine_pka_dsa_finish(DSA *dsa);
+static DSA_METHOD *pka_dsa_meth = NULL;
+#endif
+
 /* DH stuff */
 #ifndef NO_DH
 static int engine_pka_dh_bn_mod_exp(const DH *dh, BIGNUM *r, const BIGNUM *a,
@@ -92,6 +106,23 @@ static RSA_METHOD pka_rsa_meth = {
 #endif
 
 /* DSA stuff */
+#ifndef NO_DSA
+static DSA_METHOD pka_dsa_meth = {
+    "BlueField DSA method",
+    NULL,
+    NULL,
+    NULL,
+    engine_pka_dsa_mod_exp,
+    engine_pka_dsa_bn_mod_exp,
+    engine_pka_dsa_init,
+    engine_pka_dsa_finish,
+    0,
+    NULL,
+    NULL,
+    NULL
+};
+#endif
+
 /* DH stuff */
 #ifndef NO_DH
 static DH_METHOD pka_dh_meth = {
@@ -144,7 +175,29 @@ static int bind_pka(ENGINE *e)
     }
 #endif
 
+#ifndef NO_DSA
     /* Setup our DSA_METHOD that we provide pointers to */
+    if ((pka_dsa_meth = DSA_meth_new("BlueField DSA method", 0)) == NULL
+        || rc != DSA_meth_set_mod_exp(pka_dsa_meth, engine_pka_dsa_mod_exp)
+        || rc != DSA_meth_set_bn_mod_exp(pka_dsa_meth, engine_pka_dsa_bn_mod_exp)
+        || rc != DSA_meth_set_init(pka_dsa_meth, engine_pka_dsa_init)
+        || rc != DSA_meth_set_finish(pka_dsa_meth, engine_pka_dsa_finish))
+    {
+        printf("ERROR: failed to setup BlueField DSA method\n");
+        return 0;
+    }
+
+    const DSA_METHOD *dsa_meth = DSA_OpenSSL();
+    rc &= DSA_meth_set_sign(pka_dsa_meth, DSA_meth_get_sign(dsa_meth));
+    rc &= DSA_meth_set_sign_setup(pka_dsa_meth, DSA_meth_get_sign_setup(dsa_meth));
+    rc &= DSA_meth_set_verify(pka_dsa_meth, DSA_meth_get_verify(dsa_meth));
+    if (!rc)
+    {
+        printf("ERROR: failed to hook DSA_OpenSSL() functions\n");
+        return 0;
+    }
+#endif
+
 #ifndef NO_DH
     /* Setup our DH_METHOD that we provide pointers to */
     if ((pka_dh_meth = DH_meth_new("BlueField DH method", 0)) == NULL
@@ -185,6 +238,18 @@ static int bind_pka(ENGINE *e)
 #endif
 
     /* Setup our DSA_METHOD that we provide pointers to */
+#ifndef NO_DSA
+    /*
+     * We know that the "DSA_OpenSSL()" functions hook properly
+     * to the bluefield-specific engine_pka_dsa_mod_exp and
+     * engine_pka_dsa_bn_mod_exp, so we use those functions.
+     */
+    const DSA_METHOD *dsa_meth  = DSA_OpenSSL();
+    pka_dsa_meth.dsa_do_sign    = dsa_meth->dsa_do_sign;
+    pka_dsa_meth.dsa_sign_setup = dsa_meth->dsa_sign_setup;
+    pka_dsa_meth.dsa_do_verify  = dsa_meth->dsa_do_verify;
+#endif
+
     /* Setup our DH_METHOD that we provide pointers to */
 #ifndef NO_DH
     /*
@@ -206,12 +271,18 @@ static int bind_pka(ENGINE *e)
 #ifndef NO_RSA
         || rc != ENGINE_set_RSA(e, pka_rsa_meth)
 #endif
+#ifndef NO_DSA
+        || rc != ENGINE_set_DSA(e, pka_dsa_meth)
+#endif
 #ifndef NO_DH
         || rc != ENGINE_set_DH(e, pka_dh_meth)
 #endif
 # else // OpenSSL >=1.0.0 && < 1.0.1
 #ifndef NO_RSA
         || rc != ENGINE_set_RSA(e, &pka_rsa_meth)
+#endif
+#ifndef NO_DSA
+        || rc != ENGINE_set_DSA(e, &pka_dsa_meth)
 #endif
 #ifndef NO_DH
         || rc != ENGINE_set_DH(e, &pka_dh_meth)
@@ -277,6 +348,9 @@ static int engine_pka_destroy(ENGINE *e)
 #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 #ifndef NO_RSA
     RSA_meth_free(pka_rsa_meth);
+#endif
+#ifndef NO_DSA
+    DSA_meth_free(pka_dsa_meth);
 #endif
 #ifndef NO_DH
     DH_meth_free(pka_dh_meth);
@@ -430,9 +504,59 @@ static int engine_pka_rsa_finish(RSA *rsa)
 }
 #endif
 
+#ifndef NO_DSA
 /* DSA implementation */
-/* DH implementation */
+static int
+engine_pka_dsa_bn_mod_exp(DSA *dsa, BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
+                          const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx)
+{
+    return engine_pka_bn_mod_exp(r, a, p, m, ctx, m_ctx);
+}
+
+static int engine_pka_dsa_mod_exp(DSA *dsa, BIGNUM *rr, const BIGNUM *a1,
+                                  const BIGNUM *p1, const BIGNUM *a2,
+                                  const BIGNUM *p2, const BIGNUM *m,
+                                  BN_CTX *ctx, BN_MONT_CTX *in_mont)
+{
+    // Algorithm: rr = a1^p1 * a2^p2 mod m
+    BIGNUM *t;
+    int rc;
+
+    rc = 1;
+    t  = BN_new();
+
+    // t = a1^p1 mod m*/
+    // rr = a2^p2 mod m */
+    // rr = rr * t mod m */
+    // TBD: BN_mod_mul() below can be replaced with pka library functions,
+    //      it has to be checked whether this will improve the performance
+    //      or the overhead of converting BN to pka_operand_t and vice versa
+    //      will be detrimental to the performance. Also, it has to be
+    //      investigated if the conversion BN <-> pka_operand_t can be skipped
+    //      for intermediate results.
+    //
+    if(!engine_pka_bn_mod_exp(t, a1, p1, m, ctx, in_mont)
+    || !engine_pka_bn_mod_exp(rr, a2, p2, m, ctx, in_mont)
+    || !BN_mod_mul(rr,rr,t,m,ctx))
+        rc = 0;
+
+    BN_free(t);
+    return rc;
+}
+
+static int engine_pka_dsa_init(DSA *dsa)
+{
+    return pka_init();
+}
+
+static int engine_pka_dsa_finish(DSA *dsa)
+{
+    return pka_finish();
+}
+#endif
+
 #ifndef NO_DH
+/* DH implementation */
 static int
 engine_pka_dh_bn_mod_exp(const DH *dh, BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
                          const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx)
