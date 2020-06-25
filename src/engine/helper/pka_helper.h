@@ -112,6 +112,29 @@ int pka_rsa_mod_exp_crt(pka_bignum_t *bn_value,
                         pka_bignum_t *bn_qinv,
                         pka_bignum_t *bn_result);
 
+// This function implements the elliptic curve point addition using
+// Bluefield PKA hardware.
+int pka_bn_ecc_pt_add(pka_bignum_t *bn_p,
+                      pka_bignum_t *bn_a,
+                      pka_bignum_t *bn_b,
+                      pka_bignum_t *bn_x1,
+                      pka_bignum_t *bn_y1,
+                      pka_bignum_t *bn_x2,
+                      pka_bignum_t *bn_y2,
+                      pka_bignum_t *bn_result_x,
+                      pka_bignum_t *bn_result_y);
+
+// This function implements the elliptic curve point multiplication using
+// Bluefield PKA hardware.
+int pka_bn_ecc_pt_mult(pka_bignum_t *bn_p,
+                       pka_bignum_t *bn_a,
+                       pka_bignum_t *bn_b,
+                       pka_bignum_t *bn_x,
+                       pka_bignum_t *bn_y,
+                       pka_bignum_t *bn_multiplier,
+                       pka_bignum_t *bn_result_x,
+                       pka_bignum_t *bn_result_y);
+
 #ifdef  __cplusplus
 }
 #endif

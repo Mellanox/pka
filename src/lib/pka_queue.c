@@ -155,6 +155,45 @@ static uint16_t pka_concat6_wlen(uint32_t word_len,
     return total_wlen;
 }
 
+// Adjusts the value present in the array pointed by buf_ptr.
+// Adjustment is done by removing zero padding at the most significant bytes.
+// Once this is done, align the new length around 8-byte boundary.
+static void pka_rm_rslt_zero_pad(pka_operand_t *result)
+{
+    uint8_t  *byte_ptr;
+    uint32_t  result_len;
+
+    result_len  = result->actual_len;
+    byte_ptr    = result->buf_ptr;
+
+    if (result->big_endian)
+    {
+        byte_ptr = &byte_ptr[0];
+
+        // Move forwards over all zero bytes.
+        while ((byte_ptr[0] == 0) && (1 <= result_len))
+        {
+            byte_ptr++;
+            result_len--;
+        }
+    }
+    else // little-endian
+    {
+        // First find the most significant byte based upon the len, and
+        // then move backwards over all zero bytes.
+        byte_ptr = &byte_ptr[result_len - 1];
+        while ((byte_ptr[0] == 0) && (1 <= result_len))
+        {
+            byte_ptr--;
+            result_len--;
+        }
+    }
+
+    // Align around 8-byte/64-bit boundary
+    result_len         = PKA_ALIGN(result_len, 8);
+    result->actual_len = result_len;
+}
+
 // Determine total memory needed in the window ram for the command and the
 // result operands. The lenght is computed in bytes.
 static uint32_t pka_operands_len(pka_opcode_t  opcode,
@@ -876,6 +915,19 @@ int pka_queue_rslt_dequeue(pka_queue_t            *queue,
         pka_queue_do_dequeue(queue, &cons_head, buf_ptr, result->actual_len);
 
         result->buf_ptr = buf_ptr;
+
+        // Remove zero padding and adjust the actual length
+        // of the second result for the following algos:
+        // 1. ECC PT Addition
+        // 2. ECC PT Multiplication
+        // 3. ECDSA signature generation
+        if ((rslt_desc->opcode == CC_ECC_PT_ADD
+            || rslt_desc->opcode == CC_ECC_PT_MULTIPLY
+            || rslt_desc->opcode == CC_ECDSA_GENERATE)
+            && result_idx == 1)
+        {
+            pka_rm_rslt_zero_pad(result);
+        }
     }
 
     pka_queue_update_tail(&queue->cons, cons_next, 0);

@@ -1340,7 +1340,7 @@ uint32_t pka_ring_results_len(pka_ring_hw_rslt_desc_t *result_desc,
     case CC_ECC_PT_MULTIPLY:
         // Returns two results (x and y values of an ECC point).
         *result1_len = rslt_byte_len;
-        *result2_len = rslt_byte_len;
+        *result2_len = rslt_byte_lenB;
 
         return 2;
 

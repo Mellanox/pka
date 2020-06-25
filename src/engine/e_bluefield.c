@@ -16,12 +16,15 @@
 #include <openssl/rsa.h>
 #include <openssl/dsa.h>
 #include <openssl/dh.h>
+#include <openssl/ec.h>
 #include <openssl/evp.h>
 #include <openssl/bn.h>
 #include <openssl/crypto.h>
 #include <openssl/ssl.h>
 #include <openssl/modes.h>
+#include <openssl/ossl_typ.h>
 
+#include "ec_local.h"
 #include "pka_helper.h"
 
 /* Attempt to have a single source for both 1.0 and 1.1 */
@@ -82,7 +85,37 @@ static int engine_pka_dh_init(DH *dh);
 static int engine_pka_dh_finish(DH *dh);
 static DH_METHOD *pka_dh_meth = NULL;
 #endif
+
 /* EC stuff */
+#ifndef NO_EC
+/* ECC POINT ADD */
+static int
+engine_pka_ecc_pt_add(const EC_GROUP *group, EC_POINT *r, const EC_POINT *a,
+                      const EC_POINT *b, BN_CTX *ctx);
+
+/* ECC POINT MULT */
+static int
+engine_pka_ecc_pt_mult(const EC_GROUP *group, EC_POINT *r, const BIGNUM *scalar,
+                       size_t num, const EC_POINT *points[],
+                       const BIGNUM *scalars[], BN_CTX *ctx);
+
+static int
+override_pka_methods(const EC_KEY *eckey, EC_GROUP **dup_group_ptr,
+                     EC_KEY **dup_key_ptr);
+/* ECDH stuff */
+static int
+engine_pka_ecdh_compute_key(unsigned char **pout, size_t *poutlen,
+                            const EC_POINT *pub_key,
+                            const EC_KEY *ecdh);
+
+/* OpenSSL ECDH placeholder */
+int (*ossl_ecdh_compute_key)(unsigned char **pout, size_t *poutlen,
+                             const EC_POINT *pub_key, const EC_KEY *ecdh);
+
+static EC_KEY_METHOD        *pka_ec_key_meth = NULL;
+static const EC_KEY_METHOD  *ec_key_meth     = NULL;
+#endif
+
 /* rand stuff */
 # else // OpenSSL >=1.0.0 && < 1.0.1
 /* RSA stuff */
@@ -223,6 +256,18 @@ static int bind_pka(ENGINE *e)
         return 0;
     }
 #endif
+
+#ifndef NO_EC
+    /* Setup our EC_KEY_METHOD that we provide pointers to */
+    ec_key_meth     = EC_KEY_OpenSSL();
+    pka_ec_key_meth = EC_KEY_METHOD_new(ec_key_meth);
+
+    EC_KEY_METHOD_set_compute_key(pka_ec_key_meth,
+                                  engine_pka_ecdh_compute_key);
+
+    /* Get OpenSSL ECDH compute */
+    EC_KEY_METHOD_get_compute_key(ec_key_meth, &ossl_ecdh_compute_key);
+#endif
 # else // OpenSSL >=1.0.0 && < 1.0.1
 #ifndef NO_RSA
     /*
@@ -261,7 +306,6 @@ static int bind_pka(ENGINE *e)
     pka_dh_meth.generate_key = dh_meth->generate_key;
     pka_dh_meth.compute_key  = dh_meth->compute_key;
 #endif
-    /* Setup our EC_KEY_METHOD that we provide pointers to */
     /* Setup our RAND_METHOD that we provide pointers to */
 # endif
 
@@ -276,6 +320,9 @@ static int bind_pka(ENGINE *e)
 #endif
 #ifndef NO_DH
         || rc != ENGINE_set_DH(e, pka_dh_meth)
+#endif
+#ifndef NO_EC
+        || rc != ENGINE_set_EC(e, pka_ec_key_meth)
 #endif
 # else // OpenSSL >=1.0.0 && < 1.0.1
 #ifndef NO_RSA
@@ -354,6 +401,9 @@ static int engine_pka_destroy(ENGINE *e)
 #endif
 #ifndef NO_DH
     DH_meth_free(pka_dh_meth);
+#ifndef NO_EC
+    EC_KEY_METHOD_free(pka_ec_key_meth);
+#endif
 #endif
 #endif
     return 1;
@@ -572,6 +622,392 @@ static int engine_pka_dh_init(DH *dh)
 static int engine_pka_dh_finish(DH *dh)
 {
     return pka_finish();
+}
+#endif
+
+#ifndef NO_EC
+/* EC implementation */
+static int
+engine_pka_ecc_pt_add(const EC_GROUP *group, EC_POINT *r, const EC_POINT *a,
+                      const EC_POINT *b, BN_CTX *ctx)
+{
+    if (r == NULL || a == NULL || b == NULL)
+        return 0;
+
+    int     rc, result_bit_len;
+    BIGNUM *P  = BN_new();
+    BIGNUM *A  = BN_new();
+    BIGNUM *B  = BN_new();
+    BIGNUM *X1 = BN_new();
+    BIGNUM *Y1 = BN_new();
+    BIGNUM *X2 = BN_new();
+    BIGNUM *Y2 = BN_new();
+    BIGNUM *XR = BN_new();
+    BIGNUM *YR = BN_new();
+    rc         = 1;
+
+    if (!EC_GROUP_get_curve(group, P, A, B, ctx))
+    {
+        printf("\n ERROR: pka_ecc_pt_add failed to get curve params.\n");
+        rc = 0;
+        goto end;
+    }
+
+    result_bit_len = BN_num_bits(P);
+
+    // Preallocate result bn's so that it can hold our big num.
+    if (!BN_set_bit(XR, result_bit_len)
+        || !BN_set_bit(YR, result_bit_len))
+    {
+        printf("ERROR: pka_ecc_pt_add failed to expand result component.\n");
+        goto end;
+    }
+
+    if (!EC_POINT_get_affine_coordinates(group, a, X1, Y1, ctx)
+        || !EC_POINT_get_affine_coordinates(group, b, X2, Y2, ctx))
+    {
+        printf("\n ERROR: pka_ecc_pt_add failed to get point co-ordinates.\n");
+        rc = 0;
+        goto end;
+    }
+
+    if (!pka_bn_ecc_pt_add((pka_bignum_t *) P,
+                           (pka_bignum_t *) A,
+                           (pka_bignum_t *) B,
+                           (pka_bignum_t *) X1,
+                           (pka_bignum_t *) Y1,
+                           (pka_bignum_t *) X2,
+                           (pka_bignum_t *) Y2,
+                           (pka_bignum_t *) XR,
+                           (pka_bignum_t *) YR))
+    {
+        printf("\n ERROR: pka_ecc_pt_add operation failed.\n");
+        rc = 0;
+        goto end;
+    }
+
+    if (!EC_POINT_set_affine_coordinates(group, r, XR, YR, ctx))
+    {
+        printf("\n ERROR: pka_ecc_pt_add failed to set result point co-ordinates.\n");
+        rc = 0;
+        goto end;
+    }
+
+end:
+    BN_free(P);
+    BN_free(A);
+    BN_free(B);
+    BN_free(X1);
+    BN_free(Y1);
+    BN_free(X2);
+    BN_free(Y2);
+    BN_free(XR);
+    BN_free(YR);
+    return rc;
+}
+
+/* 
+ * NOTE: OpenSSL library recommends that the engine_pka_ecc_pt_mult(),
+ *       meet the below requirements:
+ *
+ *   r := generator * scalar
+ *        + points[0] * scalars[0]
+ *        + ...
+ *        + points[num-1] * scalars[num-1].
+ *
+ * For a fixed point multiplication (scalar != NULL, num == 0)
+ * or a variable point multiplication (scalar == NULL, num == 1),
+ * mul() must use a constant time algorithm: in both cases callers
+ * should provide an input scalar (either scalar or scalars[0])
+ * in the range [0, ec_group_order); for robustness, implementers
+ * should handle the case when the scalar has not been reduced, but
+ * may treat it as an unusual input, without any constant-timeness
+ * guarantee.
+ */
+static int
+engine_pka_ecc_pt_mult(const EC_GROUP *group, EC_POINT *r, const BIGNUM *scalar,
+                       size_t num, const EC_POINT *points[],
+                       const BIGNUM *scalars[], BN_CTX *ctx)
+{
+    int             rc, result_bit_len;
+    EC_POINT       *result;
+    const EC_POINT *g;
+    BIGNUM         *P  = BN_new();
+    BIGNUM         *A  = BN_new();
+    BIGNUM         *B  = BN_new();
+    BIGNUM         *X  = BN_new();
+    BIGNUM         *Y  = BN_new();
+    BIGNUM         *XR = BN_new();
+    BIGNUM         *YR = BN_new();
+    BIGNUM         *XD = NULL;
+    BIGNUM         *YD = NULL;
+
+    rc                 = 1;
+    result             = EC_POINT_new(group);
+    g                  = EC_GROUP_get0_generator(group);
+
+    if (result == NULL || XR == NULL || YR == NULL)
+        goto end;
+
+    // Retrieve p,a,b parameters pertaining to the curve.
+    if (!EC_GROUP_get_curve(group, P, A, B, ctx))
+    {
+        printf("\n ERROR: pka_ecc_pt_mult failed to get curve params.\n");
+        rc = 0;
+        goto end;
+    }
+
+    result_bit_len = BN_num_bits(P);
+
+    // Preallocate result bn's so that it can hold our big num.
+    if (!BN_set_bit(XR, result_bit_len)
+        || !BN_set_bit(YR, result_bit_len))
+    {
+        printf("ERROR: pka_ecc_pt_mult failed to expand result component.\n");
+        goto end;
+    }
+
+    // Generator point present.
+    if (scalar != NULL && g != NULL)
+    {
+        if (!EC_POINT_get_affine_coordinates(group, g, X, Y, ctx))
+        {
+            printf("\n ERROR: pka_ecc_pt_mult:"
+                              "failed to get generator point co-ordinates.\n");
+            rc = 0;
+            goto end;
+        }
+
+        rc &= pka_bn_ecc_pt_mult((pka_bignum_t *) P,
+                                 (pka_bignum_t *) A,
+                                 (pka_bignum_t *) B,
+                                 (pka_bignum_t *) X,
+                                 (pka_bignum_t *) Y,
+                                 (pka_bignum_t *) scalar,
+                                 (pka_bignum_t *) XR,
+                                 (pka_bignum_t *) YR);
+
+        // Exit if operation failed.
+        if (!rc)
+        {
+            printf("\n ERROR: pka_ecc_pt_mult:"
+                              "Operation failed.\n");
+            goto end;
+        }
+
+        // Duplicate the result for future use.
+        if (num >= 1)
+        {
+            XD = BN_dup(XR);
+            YD = BN_dup(YR);
+            if (XD == NULL || YD == NULL)
+            {
+                printf("\n ERROR: pka_ecc_pt_mult:"
+                                  "failed to duplicate point co-ordinates.\n");
+                rc = 0;
+                goto end;
+            }
+        }
+    }
+
+    // Input points passed via points[] and scalar via scalars[].
+    if (num >= 1 && points != NULL && scalars != NULL)
+    {
+        uint64_t  i;
+        BIGNUM   *XP = NULL;
+        BIGNUM   *YP = NULL;
+
+        for (i = 0; i < num; i++)
+        {
+            // Input check.
+            if (points[i] == NULL || scalars[i] == NULL)
+            {
+                printf("\n ERROR: pka_ecc_pt_mult:"
+                                  "Input can't be NULL.\n");
+                rc = 0;
+                goto end;
+            }
+
+            if (!EC_POINT_get_affine_coordinates(group, points[i], X, Y, ctx))
+            {
+                printf("\n ERROR: pka_ecc_pt_mult:"
+                                  "failed to get point co-ordinates.\n");
+                rc = 0;
+                goto end;
+            }
+
+            rc &= pka_bn_ecc_pt_mult((pka_bignum_t *) P,
+                                     (pka_bignum_t *) A,
+                                     (pka_bignum_t *) B,
+                                     (pka_bignum_t *) X,
+                                     (pka_bignum_t *) Y,
+                                     (pka_bignum_t *) scalars[i],
+                                     (pka_bignum_t *) XR,
+                                     (pka_bignum_t *) YR);
+
+            // Skip addition for the first iteration.
+            if (rc && i != 0)
+            {
+                rc &= pka_bn_ecc_pt_add((pka_bignum_t *) P,
+                                        (pka_bignum_t *) A,
+                                        (pka_bignum_t *) B,
+                                        (pka_bignum_t *) XR,
+                                        (pka_bignum_t *) YR,
+                                        (pka_bignum_t *) XP,
+                                        (pka_bignum_t *) YP,
+                                        (pka_bignum_t *) XR,
+                                        (pka_bignum_t *) YR);
+                BN_free(XP);
+                BN_free(YP);
+            }
+            // Add the (generator*scalar) point if present, during the
+            // first iteration.
+            else if (rc && scalar != NULL && g != NULL)
+            {
+                rc &= pka_bn_ecc_pt_add((pka_bignum_t *) P,
+                                        (pka_bignum_t *) A,
+                                        (pka_bignum_t *) B,
+                                        (pka_bignum_t *) XR,
+                                        (pka_bignum_t *) YR,
+                                        (pka_bignum_t *) XD,
+                                        (pka_bignum_t *) YD,
+                                        (pka_bignum_t *) XR,
+                                        (pka_bignum_t *) YR);
+                BN_free(XD);
+                BN_free(YD);
+            }
+
+            // Exit if any of the above operations failed.
+            if (!rc)
+            {
+                printf("\n ERROR: pka_ecc_pt_mult:"
+                                  "Operation failed.\n");
+                goto end;
+            }
+
+            // Store the results for addition during next iteration.
+            // Not required to store result for last iteration.
+            if (i < num-1)
+            {
+                XP = BN_dup(XR);
+                YP = BN_dup(YR);
+                if (XP == NULL || YP == NULL)
+                {
+                    printf("\n ERROR: pka_ecc_pt_mult:"
+                                      "failed to duplicate point.\n");
+                    rc = 0;
+                    goto end;
+                }
+            }
+        }
+    }
+
+    if (!EC_POINT_set_affine_coordinates(group, r, XR, YR, ctx))
+    {
+        printf("\n ERROR: pka_ecc_pt_mult:"
+                          "failed to set result point co-ordinates.\n");
+        rc = 0;
+        goto end;
+    }
+
+end:
+    BN_free(P);
+    BN_free(A);
+    BN_free(B);
+    BN_free(X);
+    BN_free(Y);
+    BN_free(XR);
+    BN_free(YR);
+    if (result)
+        EC_POINT_free(result);
+    return rc;
+}
+
+
+static int
+override_pka_methods(const EC_KEY *eckey, EC_GROUP **dup_group_ptr,
+                     EC_KEY **dup_key_ptr)
+{
+    int             rc;
+    const EC_GROUP *group;
+    EC_GROUP       *dup_group;
+    EC_KEY         *dup_key;
+
+    rc        = 1;
+    group     = EC_KEY_get0_group(eckey);
+
+    // Duplicate group and eckey in order to override methods.
+    dup_group = EC_GROUP_dup(group);
+    dup_key   = EC_KEY_dup(eckey);
+
+    if (!dup_group || !dup_key)
+    {
+        printf("\n ERROR: Group, Key duplication failed.\n");
+        rc = 0;
+        goto end;
+    }
+
+    dup_group->meth = malloc(sizeof(EC_METHOD));
+
+    memcpy(dup_group->meth, EC_GROUP_method_of(group), sizeof(EC_METHOD));
+
+    // Override the mul and add functions with pka engine functions.
+    dup_group->meth->mul       = engine_pka_ecc_pt_mult;
+    dup_group->meth->add       = engine_pka_ecc_pt_add;
+
+    // EC_METHOD should be same in EC_GROUP and (generator point)EC_POINT.
+    dup_group->generator->meth = dup_group->meth;
+
+    if (!EC_KEY_set_group(dup_key, dup_group))
+    {
+        printf("\n ERROR: Failed to set group.\n");
+        rc = 0;
+        // Free memory allocations.
+        free(dup_group->meth);
+        EC_GROUP_free(dup_group);
+        EC_KEY_free(dup_key);
+        goto end;
+    }
+
+    // EC_METHOD should be same in EC_GROUP and (pub_key)EC_POINT.
+    dup_key->pub_key->meth = dup_group->meth;
+
+    // Set the output
+    *dup_group_ptr         = dup_group;
+    *dup_key_ptr           = dup_key;
+
+end:
+    return rc;
+}
+
+static int
+engine_pka_ecdh_compute_key(unsigned char **pout, size_t *poutlen,
+                            const EC_POINT *pub_key, const EC_KEY *ecdh)
+{
+    int       rc;
+    EC_GROUP *dup_group = NULL;
+    EC_KEY   *dup_key   = NULL;
+    EC_POINT *ecdh_pkey = NULL;
+
+
+    if (!override_pka_methods(ecdh, &dup_group, &dup_key))
+    {
+        rc = 0;
+        goto end;
+    }
+
+    ecdh_pkey       = malloc(sizeof(EC_POINT));
+    memcpy(ecdh_pkey, pub_key, sizeof(EC_POINT));
+    ecdh_pkey->meth = dup_group->meth;
+
+    rc = ossl_ecdh_compute_key(pout, poutlen, ecdh_pkey, dup_key);
+
+    free(dup_group->meth);
+    free(ecdh_pkey);
+    EC_GROUP_free(dup_group);
+    EC_KEY_free(dup_key);
+end:
+    return rc;
 }
 #endif
 #endif /* BLUEFIELD_DYNAMIC_ENGINE */
