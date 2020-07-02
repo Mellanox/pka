@@ -135,6 +135,12 @@ int pka_bn_ecc_pt_mult(pka_bignum_t *bn_p,
                        pka_bignum_t *bn_result_x,
                        pka_bignum_t *bn_result_y);
 
+// This function implements the modular inverse using BlueField
+// PKA hardware.
+int pka_bn_mod_inv(pka_bignum_t *bn_value,
+                   pka_bignum_t *bn_modulus,
+                   pka_bignum_t *bn_result);
+
 #ifdef  __cplusplus
 }
 #endif

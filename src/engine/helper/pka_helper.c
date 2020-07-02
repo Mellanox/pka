@@ -586,6 +586,30 @@ static ecc_point_t *pka_do_ecc_pt_add(pka_handle_t   handle,
     return results_to_ecc_point(handle);
 }
 
+static pka_operand_t *pka_do_mod_inv(pka_handle_t   handle,
+                                     pka_operand_t *value,
+                                     pka_operand_t *modulus)
+{
+    int rc;
+
+    PKA_ASSERT(value   != NULL);
+    PKA_ASSERT(modulus != NULL);
+
+    rc = pka_modular_inverse(handle, NULL, value, modulus);
+
+    if (SUCCESS != rc)
+    {
+        DEBUG(PKA_D_ERROR, "pka_modular_inverse failed, rc=%d\n", rc);
+#ifdef VERBOSE_MODE
+        print_operand("  value   =", value,    "\n");
+        print_operand("  modulus =", modulus,  "\n");
+#endif
+        return NULL;
+    }
+
+    return results_to_operand(handle);
+}
+
 //
 // Engine helper functions
 //
@@ -921,6 +945,35 @@ int pka_bn_ecc_pt_add(pka_bignum_t *bn_p,
     return rc;
 }
 
+int  pka_bn_mod_inv(pka_bignum_t *bn_value,
+                    pka_bignum_t *bn_modulus,
+                    pka_bignum_t *bn_result)
+{
+    pka_operand_t *value, *modulus, *result;
+    int            rc;
+
+    PKA_ASSERT(bn_value   != NULL);
+    PKA_ASSERT(bn_modulus != NULL);
+    PKA_ASSERT(bn_result  != NULL);
+
+    return_if_handle_invalid(tls_handle);
+
+    value   = bignum_to_operand(bn_value);
+    modulus = bignum_to_operand(bn_modulus);
+
+    result = pka_do_mod_inv(tls_handle, value, modulus);
+    if (result) {
+        set_bignum(bn_result, result);
+        rc = 1;
+    } else
+        rc = 0;
+
+    free_operand(value);
+    free_operand(modulus);
+    free_operand(result);
+
+    return rc;
+}
 int pka_init(void)
 {
     int ret;

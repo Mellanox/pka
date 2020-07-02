@@ -49,6 +49,10 @@ void engine_load_pka_int(void);
 /* BN mod_exp */
 static int engine_pka_bn_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
                                  const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx);
+/* BN mod_inv */
+static int
+engine_pka_bn_mod_inv(const EC_GROUP *group, BIGNUM *r, const BIGNUM *x,
+                      BN_CTX *ctx);
 
 # if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 /* RSA stuff */
@@ -103,10 +107,56 @@ static int
 override_pka_methods(const EC_KEY *eckey, EC_GROUP **dup_group_ptr,
                      EC_KEY **dup_key_ptr);
 /* ECDH stuff */
+#ifndef NO_ECDH
 static int
 engine_pka_ecdh_compute_key(unsigned char **pout, size_t *poutlen,
                             const EC_POINT *pub_key,
                             const EC_KEY *ecdh);
+#endif /* ECDH */
+
+/* ECDSA stuff */
+#ifndef NO_ECDSA
+static int
+engine_pka_ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp,
+                            BIGNUM **rp);
+
+static int
+engine_pka_ecdsa_sign(int type, const unsigned char *dgst, int dlen,
+                      unsigned char *sig, unsigned int *siglen,
+                      const BIGNUM *kinv, const BIGNUM *r, EC_KEY *eckey);
+
+static ECDSA_SIG*
+engine_pka_ecdsa_sign_sig(const unsigned char *dgst, int dgst_len,
+                          const BIGNUM *in_kinv, const BIGNUM *in_r,
+                          EC_KEY *eckey);
+
+static int
+engine_pka_ecdsa_verify(int type, const unsigned char *dgst, int dgst_len,
+                        const unsigned char *sigbuf, int sig_len, EC_KEY *eckey);
+
+static int
+engine_pka_ecdsa_verify_sig(const unsigned char *dgst, int dgst_len,
+                            const ECDSA_SIG *sig, EC_KEY *eckey);
+
+/* OpennSSL ECDSA placeholders */
+int (*ossl_sign)(int type, const unsigned char *dgst, int dlen, unsigned char
+                 *sig, unsigned int *siglen, const BIGNUM *kinv,
+                 const BIGNUM *r, EC_KEY *eckey);
+
+int (*ossl_sign_setup)(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp,
+                       BIGNUM **rp);
+
+ECDSA_SIG *(*ossl_sign_sig)(const unsigned char *dgst, int dgst_len,
+                            const BIGNUM *in_kinv, const BIGNUM *in_r,
+                            EC_KEY *eckey);
+
+int (*ossl_verify)(int type, const unsigned char *dgst, int dgst_len,
+                   const unsigned char *sigbuf, int sig_len, EC_KEY *eckey);
+
+int (*ossl_verify_sig)(const unsigned char *dgst, int dgst_len,
+                       const ECDSA_SIG *sig, EC_KEY *eckey);
+
+#endif /* ECDSA */
 
 /* OpenSSL ECDH placeholder */
 int (*ossl_ecdh_compute_key)(unsigned char **pout, size_t *poutlen,
@@ -114,7 +164,7 @@ int (*ossl_ecdh_compute_key)(unsigned char **pout, size_t *poutlen,
 
 static EC_KEY_METHOD        *pka_ec_key_meth = NULL;
 static const EC_KEY_METHOD  *ec_key_meth     = NULL;
-#endif
+#endif /* EC */
 
 /* rand stuff */
 # else // OpenSSL >=1.0.0 && < 1.0.1
@@ -262,12 +312,31 @@ static int bind_pka(ENGINE *e)
     ec_key_meth     = EC_KEY_OpenSSL();
     pka_ec_key_meth = EC_KEY_METHOD_new(ec_key_meth);
 
+#ifndef NO_ECDH
     EC_KEY_METHOD_set_compute_key(pka_ec_key_meth,
                                   engine_pka_ecdh_compute_key);
 
     /* Get OpenSSL ECDH compute */
     EC_KEY_METHOD_get_compute_key(ec_key_meth, &ossl_ecdh_compute_key);
-#endif
+#endif /* ECDH */
+
+#ifndef NO_ECDSA
+    EC_KEY_METHOD_set_sign(pka_ec_key_meth, engine_pka_ecdsa_sign,
+                           engine_pka_ecdsa_sign_setup,
+                           engine_pka_ecdsa_sign_sig);
+
+    EC_KEY_METHOD_set_verify(pka_ec_key_meth, engine_pka_ecdsa_verify,
+                             engine_pka_ecdsa_verify_sig);
+
+    /* Get OpenSSL methods */
+    EC_KEY_METHOD_get_sign(ec_key_meth, &ossl_sign, &ossl_sign_setup, &ossl_sign_sig);
+
+    EC_KEY_METHOD_get_verify(ec_key_meth, &ossl_verify, &ossl_verify_sig);
+
+#endif /* ECDSA */
+
+#endif /* EC */
+
 # else // OpenSSL >=1.0.0 && < 1.0.1
 #ifndef NO_RSA
     /*
@@ -443,6 +512,43 @@ engine_pka_bn_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
 end:
     BN_free(result);
     return rc;
+}
+
+/* BN_mod_inv */
+static int
+engine_pka_bn_mod_inv(const EC_GROUP *group, BIGNUM *r, const BIGNUM *x,
+                      BN_CTX *ctx)
+{
+    if(group == NULL || r == NULL || x == NULL)
+        return 0;
+
+    int     rc, result_bit_len;
+    BIGNUM *order  = BN_new();
+    BIGNUM *result = BN_new();
+    rc             = 0;
+
+    EC_GROUP_get_order(group, order, ctx);
+
+    result_bit_len = BN_num_bits(order);
+
+    /* Expand the result bn so that it can hold our big num */
+    if (!BN_set_bit(result, result_bit_len))
+    {
+        printf("ERROR: bn_mod_inv failed to expand Inverse result component\n");
+        goto end;
+    }
+
+    rc = pka_bn_mod_inv((pka_bignum_t *) x,
+                        (pka_bignum_t *) order,
+                        (pka_bignum_t *) result);
+
+    if (!rc || BN_copy(r, result) == NULL)
+        rc = 0;
+
+end:
+    BN_free(result);
+    return rc;
+
 }
 
 #ifndef NO_RSA
@@ -923,7 +1029,6 @@ end:
     return rc;
 }
 
-
 static int
 override_pka_methods(const EC_KEY *eckey, EC_GROUP **dup_group_ptr,
                      EC_KEY **dup_key_ptr)
@@ -951,12 +1056,13 @@ override_pka_methods(const EC_KEY *eckey, EC_GROUP **dup_group_ptr,
 
     memcpy(dup_group->meth, EC_GROUP_method_of(group), sizeof(EC_METHOD));
 
-    // Override the mul and add functions with pka engine functions.
-    dup_group->meth->mul       = engine_pka_ecc_pt_mult;
-    dup_group->meth->add       = engine_pka_ecc_pt_add;
+    // Override the mul, add and inverse functions with pka engine functions.
+    dup_group->meth->mul                   = engine_pka_ecc_pt_mult;
+    dup_group->meth->add                   = engine_pka_ecc_pt_add;
+    dup_group->meth->field_inverse_mod_ord = engine_pka_bn_mod_inv;
 
     // EC_METHOD should be same in EC_GROUP and (generator point)EC_POINT.
-    dup_group->generator->meth = dup_group->meth;
+    dup_group->generator->meth             = dup_group->meth;
 
     if (!EC_KEY_set_group(dup_key, dup_group))
     {
@@ -980,6 +1086,7 @@ end:
     return rc;
 }
 
+#ifndef NO_ECDH
 static int
 engine_pka_ecdh_compute_key(unsigned char **pout, size_t *poutlen,
                             const EC_POINT *pub_key, const EC_KEY *ecdh)
@@ -1009,5 +1116,127 @@ engine_pka_ecdh_compute_key(unsigned char **pout, size_t *poutlen,
 end:
     return rc;
 }
-#endif
+#endif /* ECDH */
+
+#ifndef NO_ECDSA
+
+static int
+engine_pka_ecdsa_sign(int type, const unsigned char *dgst, int dlen,
+                      unsigned char *sig, unsigned int *siglen,
+                      const BIGNUM *kinv, const BIGNUM *r, EC_KEY *eckey)
+{
+    int       rc;
+    EC_GROUP *dup_group = NULL;
+    EC_KEY   *dup_key   = NULL;
+
+    if (!override_pka_methods(eckey, &dup_group, &dup_key))
+    {
+        rc = 0;
+        goto end;
+    }
+
+    rc = ossl_sign(type, dgst, dlen, sig, siglen, kinv, r, dup_key);
+
+    free(dup_group->meth);
+    EC_GROUP_free(dup_group);
+    EC_KEY_free(dup_key);
+end:
+    return rc;
+}
+
+static int
+engine_pka_ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp,
+                            BIGNUM **rp)
+{
+    int       rc;
+    EC_GROUP *dup_group = NULL;
+    EC_KEY   *dup_key   = NULL;
+
+    if (!override_pka_methods(eckey, &dup_group, &dup_key))
+    {
+        rc = 0;
+        goto end;
+    }
+
+    rc = ossl_sign_setup(dup_key, ctx_in, kinvp, rp);
+
+    free(dup_group->meth);
+    EC_GROUP_free(dup_group);
+    EC_KEY_free(dup_key);
+end:
+    return rc;
+}
+
+static ECDSA_SIG*
+engine_pka_ecdsa_sign_sig(const unsigned char *dgst, int dgst_len,
+                          const BIGNUM *in_kinv, const BIGNUM *in_r,
+                          EC_KEY *eckey)
+{
+    EC_GROUP  *dup_group = NULL;
+    EC_KEY    *dup_key   = NULL;
+    ECDSA_SIG *ret       = NULL;
+
+
+    if (!override_pka_methods(eckey, &dup_group, &dup_key))
+    {
+        goto end;
+    }
+
+    ret = ossl_sign_sig(dgst, dgst_len, in_kinv, in_r, dup_key);
+
+    free(dup_group->meth);
+    EC_GROUP_free(dup_group);
+    EC_KEY_free(dup_key);
+end:
+    return ret;
+}
+
+static int
+engine_pka_ecdsa_verify(int type, const unsigned char *dgst, int dgst_len,
+                        const unsigned char *sigbuf, int sig_len, EC_KEY *eckey)
+{
+    int       rc;
+    EC_GROUP *dup_group = NULL;
+    EC_KEY   *dup_key   = NULL;
+
+    if (!override_pka_methods(eckey, &dup_group, &dup_key))
+    {
+        rc = 0;
+        goto end;
+    }
+
+    rc = ossl_verify(type, dgst, dgst_len, sigbuf, sig_len, dup_key);
+
+    free(dup_group->meth);
+    EC_GROUP_free(dup_group);
+    EC_KEY_free(dup_key);
+end:
+    return rc;
+}
+
+static int
+engine_pka_ecdsa_verify_sig(const unsigned char *dgst, int dgst_len,
+                            const ECDSA_SIG *sig, EC_KEY *eckey)
+{
+    int       rc;
+    EC_GROUP *dup_group = NULL;
+    EC_KEY   *dup_key   = NULL;
+
+    if (!override_pka_methods(eckey, &dup_group, &dup_key))
+    {
+        rc = 0;
+        goto end;
+    }
+
+    rc = ossl_verify_sig(dgst, dgst_len, sig, dup_key);
+
+    free(dup_group->meth);
+    EC_GROUP_free(dup_group);
+    EC_KEY_free(dup_key);
+end:
+    return rc;
+}
+
+#endif /* ECDSA */
+#endif /* EC */
 #endif /* BLUEFIELD_DYNAMIC_ENGINE */
