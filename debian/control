@@ -2,7 +2,7 @@ Source: libpka
 Section: libs
 Priority: optional
 Maintainer: Mellanox Technologies <support@mellanox.com>
-Build-Depends: debhelper (>=11~), autotools-dev, pkg-config, libssl-dev
+Build-Depends: debhelper (>=11~), pkg-config, libssl-dev
 Standards-Version: 4.1.4
 Homepage: https://github.com/Mellanox/pka
 

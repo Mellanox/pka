@@ -1,3 +1,9 @@
+libpka (1.1-1) UNRELEASED; urgency=low
+
+  * Add ECDH and DH API's in pka library.
+  * Add DH, DSA, ECDH and ECDSA support to pka engine.
+
+ -- Mahantesh Salimath <mahantesh@nvidia.com>  Tue, 28 Jul 2020 21:13:58 +0000
 libpka (1.0-1) UNRELEASED; urgency=low
 
   * Initial release.
