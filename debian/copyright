@@ -33,7 +33,9 @@ Copyright: 2016 Mellanox Technologies, Ltd.
 License:   BSD-3-Clause
 
 Files:     Makefile
+           .*
            documentation/pka-programming-doc.pdf
+           documentation/pka-architecture-doc.pdf
            src/Makefile.am
            src/autogen.sh
            src/configure.ac
@@ -88,7 +90,7 @@ License: GPL-2+
 Files:     src/engine/helper/ec_local.h
 Copyright: 2001-2019 The OpenSSL Project Authors.
            2002, Oracle and/or its affiliates.
-License:   OpenSSL License
+License:   OpenSSL
 
 License:   BSD-3-Clause
  Redistribution and use in source and binary forms, with or without
@@ -137,7 +139,7 @@ License: GPL-2+
  On Debian systems, the complete text of the GNU General
  Public License version 2 can be found in "/usr/share/common-licenses/GPL-2".
 
-License: OpenSSL License
+License: OpenSSL
   The OpenSSL toolkit stays under a double license, i.e. both the conditions of
   the OpenSSL License and the original SSLeay license apply to the toolkit.
   See below for the actual license texts.
