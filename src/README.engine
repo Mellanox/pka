@@ -69,6 +69,9 @@ Important Notes
     one must build the same version as that which is installed on the
     target rootfs.
 
+  * OpenSSL version 1.1.1 is recommended. This is necessary in-order to
+    offload ECDH and ECDSA.
+
 
 ===============================================================================
 How to build
@@ -172,8 +175,17 @@ How to load
   To use the BlueField PKA engine, one may pass the option '-engine pka'
   to dynamically load the module and enable hardware acceleration.
 
-  For example:
+  Examples:
 
     # openssl speed -engine pka rsa512
+    engine "pka" set.
+    ...
+    # openssl speed -engine pka dsa512
+    engine "pka" set.
+    ...
+    # openssl speed -engine pka ecdhp256
+    engine "pka" set.
+    ...
+    # openssl speed -engine pka ecdsap256
     engine "pka" set.
     ...
