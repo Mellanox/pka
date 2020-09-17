@@ -24,7 +24,10 @@
 #include <openssl/modes.h>
 #include <openssl/ossl_typ.h>
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 #include "ec_local.h"
+#endif
+
 #include "pka_helper.h"
 
 /* Attempt to have a single source for both 1.0 and 1.1 */
@@ -45,16 +48,16 @@ static int engine_pka_init(ENGINE *e);
 static int engine_pka_finish(ENGINE *e);
 void engine_load_pka_int(void);
 
-/* BN operations */
 /* BN mod_exp */
 static int engine_pka_bn_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
                                  const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx);
-/* BN mod_inv */
-static int
-engine_pka_bn_mod_inv(const EC_GROUP *group, BIGNUM *r, const BIGNUM *x,
-                      BN_CTX *ctx);
 
-# if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+/* DSA stuff */
+#ifndef NO_DSA
+static int engine_pka_dsa_init(DSA *dsa);
+static int engine_pka_dsa_finish(DSA *dsa);
+#endif
+
 /* RSA stuff */
 #ifndef NO_RSA
 static int engine_pka_rsa_mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa,
@@ -62,7 +65,24 @@ static int engine_pka_rsa_mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa,
 
 static int engine_pka_rsa_init(RSA *rsa);
 static int engine_pka_rsa_finish(RSA *rsa);
+#endif
 
+/* DH stuff */
+#ifndef NO_DH
+static int engine_pka_dh_bn_mod_exp(const DH *dh, BIGNUM *r, const BIGNUM *a,
+                                    const BIGNUM *p, const BIGNUM *m,
+                                    BN_CTX *ctx, BN_MONT_CTX *m_ctx);
+static int engine_pka_dh_init(DH *dh);
+static int engine_pka_dh_finish(DH *dh);
+#endif
+
+# if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+/* BN mod_inv */
+static int
+engine_pka_bn_mod_inv(const EC_GROUP *group, BIGNUM *r, const BIGNUM *x,
+                      BN_CTX *ctx);
+/* RSA stuff */
+#ifndef NO_RSA
 static RSA_METHOD *pka_rsa_meth = NULL;
 #endif
 
@@ -75,18 +95,11 @@ static int engine_pka_dsa_mod_exp(DSA *dsa, BIGNUM *rr, const BIGNUM *a1,
 static int engine_pka_dsa_bn_mod_exp(DSA *dsa, BIGNUM *r, const BIGNUM *a,
                                      const BIGNUM *p, const BIGNUM *m,
                                      BN_CTX *ctx, BN_MONT_CTX *m_ctx);
-static int engine_pka_dsa_init(DSA *dsa);
-static int engine_pka_dsa_finish(DSA *dsa);
 static DSA_METHOD *pka_dsa_meth = NULL;
 #endif
 
 /* DH stuff */
 #ifndef NO_DH
-static int engine_pka_dh_bn_mod_exp(const DH *dh, BIGNUM *r, const BIGNUM *a,
-                                    const BIGNUM *p, const BIGNUM *m,
-                                    BN_CTX *ctx, BN_MONT_CTX *m_ctx);
-static int engine_pka_dh_init(DH *dh);
-static int engine_pka_dh_finish(DH *dh);
 static DH_METHOD *pka_dh_meth = NULL;
 #endif
 
@@ -112,6 +125,10 @@ static int
 engine_pka_ecdh_compute_key(unsigned char **pout, size_t *poutlen,
                             const EC_POINT *pub_key,
                             const EC_KEY *ecdh);
+
+/* OpenSSL ECDH placeholder */
+int (*ossl_ecdh_compute_key)(unsigned char **pout, size_t *poutlen,
+                             const EC_POINT *pub_key, const EC_KEY *ecdh);
 #endif /* ECDH */
 
 /* ECDSA stuff */
@@ -158,10 +175,6 @@ int (*ossl_verify_sig)(const unsigned char *dgst, int dgst_len,
 
 #endif /* ECDSA */
 
-/* OpenSSL ECDH placeholder */
-int (*ossl_ecdh_compute_key)(unsigned char **pout, size_t *poutlen,
-                             const EC_POINT *pub_key, const EC_KEY *ecdh);
-
 static EC_KEY_METHOD        *pka_ec_key_meth = NULL;
 static const EC_KEY_METHOD  *ec_key_meth     = NULL;
 #endif /* EC */
@@ -190,6 +203,13 @@ static RSA_METHOD pka_rsa_meth = {
 
 /* DSA stuff */
 #ifndef NO_DSA
+static int engine_pka_dsa_mod_exp(DSA *dsa, BIGNUM *rr, BIGNUM *a1,
+                                  BIGNUM *p1, BIGNUM *a2,
+                                  BIGNUM *p2, BIGNUM *m,
+                                  BN_CTX *ctx, BN_MONT_CTX *in_mont);
+static int engine_pka_dsa_bn_mod_exp(DSA *dsa, BIGNUM *r, BIGNUM *a,
+                                     const BIGNUM *p, const BIGNUM *m,
+                                     BN_CTX *ctx, BN_MONT_CTX *m_ctx);
 static DSA_METHOD pka_dsa_meth = {
     "BlueField DSA method",
     NULL,
@@ -514,6 +534,7 @@ end:
     return rc;
 }
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 /* BN_mod_inv */
 static int
 engine_pka_bn_mod_inv(const EC_GROUP *group, BIGNUM *r, const BIGNUM *x,
@@ -550,6 +571,7 @@ end:
     return rc;
 
 }
+#endif
 
 #ifndef NO_RSA
 /* RSA implementation */
@@ -663,16 +685,28 @@ static int engine_pka_rsa_finish(RSA *rsa)
 #ifndef NO_DSA
 /* DSA implementation */
 static int
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 engine_pka_dsa_bn_mod_exp(DSA *dsa, BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
                           const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx)
+#else
+engine_pka_dsa_bn_mod_exp(DSA *dsa, BIGNUM *r, BIGNUM *a, const BIGNUM *p,
+                          const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx)
+#endif
 {
     return engine_pka_bn_mod_exp(r, a, p, m, ctx, m_ctx);
 }
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 static int engine_pka_dsa_mod_exp(DSA *dsa, BIGNUM *rr, const BIGNUM *a1,
                                   const BIGNUM *p1, const BIGNUM *a2,
                                   const BIGNUM *p2, const BIGNUM *m,
                                   BN_CTX *ctx, BN_MONT_CTX *in_mont)
+#else
+static int engine_pka_dsa_mod_exp(DSA *dsa, BIGNUM *rr, BIGNUM *a1,
+                                  BIGNUM *p1, BIGNUM *a2,
+                                  BIGNUM *p2, BIGNUM *m,
+                                  BN_CTX *ctx, BN_MONT_CTX *in_mont)
+#endif
 {
     // Algorithm: rr = a1^p1 * a2^p2 mod m
     BIGNUM *t;
@@ -730,6 +764,8 @@ static int engine_pka_dh_finish(DH *dh)
     return pka_finish();
 }
 #endif
+
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 
 #ifndef NO_EC
 /* EC implementation */
@@ -1239,4 +1275,5 @@ end:
 
 #endif /* ECDSA */
 #endif /* EC */
+#endif /* >= OpenSSL 1.1.0 */
 #endif /* BLUEFIELD_DYNAMIC_ENGINE */
