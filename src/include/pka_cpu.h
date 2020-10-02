@@ -38,10 +38,16 @@
 #include <linux/types.h>
 #include <linux/timex.h>
 #else
-#include <stdint.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <time.h>
+#include <unistd.h>
 #endif
 
 #include "pka_common.h"
@@ -61,8 +67,8 @@
 // rather than too short.
 //
 //*Warning: use dummy value for frequency
-//#define CPU_HZ_MAX      (2 * GIGA) // Cortex A72 : 2 GHz max -> 2.5 GHz max
-#define CPU_HZ_MAX        (1255 * MEGA) // CPU Freq for High/Bin Chip
+#define CPU_HZ_MAX      (2 * GIGA) // Cortex A72 : 2 GHz max -> 2.5 GHz max
+//#define CPU_HZ_MAX        (1255 * MEGA) // CPU Freq for High/Bin Chip
 
 // YIELD hints the CPU to switch to another thread if possible
 // and executes as a NOP otherwise.
@@ -79,17 +85,232 @@ static inline uint64_t pka_early_cpu_speed(void)
   return CPU_HZ_MAX;
 }
 #else
+#define PKA_DMI_TYPE_END 127
 
+#define PKA_DMI_TABLE_LEN 4
+#define PKA_DMI_TABLE_OFFSET 0x0C
+
+#define PKA_DMI_PROC_TYPE 4
+#define PKA_DMI_PROC_TABLE_LEN 0x1A
+#define PKA_DMI_PROC_FREQ_OFFSET 0x16
+
+#define PKA_DMI_HEADER_LEN_OFFSET 1
+#define PKA_DMI_HEADER_TYPE_OFFSET 0
+#define PKA_DMI_HEADER_HANDLE_OFFSET 2
+
+#define PKA_SYS_DMI_TABLE "/sys/firmware/dmi/tables/DMI"
+#define PKA_SYS_SMBIOS_ENTRY_POINT "/sys/firmware/dmi/tables/smbios_entry_point"
+
+#define PKA_SMBIOS_LEN_OFFSET 0x06
+#define PKA_SMBIOS_EXPECTED_LEN 0x20
+
+#ifdef __BIG_ENDIAN__
+#define WORD(x) (u16)((x)[0] + ((x)[1] << 8))
+#define DWORD(x) (u32)((x)[0] + ((x)[1] << 8) + ((x)[2] << 16) + ((x)[3] << 24))
+#define QWORD(x) (U64(DWORD(x), DWORD(x + 4)))
+#else
+#define WORD(x) (uint16_t)(*(const uint16_t *)(x))
+#define DWORD(x) (uint32_t)(*(const uint32_t *)(x))
+#define QWORD(x) (*(const uint64_t *)(x))
+#endif
 #define MAX_CLOCK_CYCLES     UINT64_MAX
+
+typedef struct {
+    uint16_t handle;
+    uint8_t  type;
+    uint8_t  length;
+    uint8_t *data;
+} pka_cpu_dmi_hdr_t;
+
+/// Global variable holding the cpu frequency.
+uint64_t cpu_f_hz;
+
+static void *pka_cpu_read_sysfs(size_t *file_len, const char *filename)
+{
+    struct stat sbuf;
+    size_t      read_count;
+    ssize_t     read_status;
+    uint8_t    *file_mem;
+    int         fd;
+
+    read_count  = 0;
+    read_status = 1;
+
+    fd = open(filename, O_RDONLY);
+    if (fd == -EPERM)
+    {
+        PKA_ERROR(PKA_CPU, "\nOpening file failed with error:%d.\n", errno);
+        return NULL;
+    }
+
+    if (!fstat(fd, &sbuf))
+    {
+        *file_len = sbuf.st_size;
+    }
+
+    file_mem = malloc(*file_len);
+    if (file_mem == NULL)
+    {
+        PKA_ERROR(PKA_CPU, "\nMemory alloc failed when reading file.\n");
+        goto out;
+    }
+
+    while (read_count != *file_len && read_status != 0)
+    {
+        read_status = read(fd, file_mem + read_count, *file_len - read_count);
+        if (read_status == -1)
+        {
+            PKA_ERROR(PKA_CPU, "\nReading file failed.\n");
+            goto err;
+        }
+        else
+            read_count += read_status;
+    }
+
+    if (read_count != *file_len)
+    {
+        PKA_ERROR(PKA_CPU, "\n EOF reached before expected length.\n");
+        goto err;
+    }
+    else
+        goto out;
+
+err:
+    free(file_mem);
+    file_mem = NULL;
+out:
+    if (close(fd) == -EPERM)
+        PKA_ERROR(PKA_CPU, "\nClosing the file failed with error=%d.\n", errno);
+
+    return file_mem;
+}
+
+static int pka_cpu_checksum(const uint8_t *buf, size_t len)
+{
+    uint8_t sum;
+    size_t  d;
+
+    sum = 0;
+
+    for (d = 0; d < len; d++)
+         sum += buf[d];
+
+    return sum == 0;
+}
+
+static uint16_t pka_cpu_read_dmi_table(const char *sysfs)
+{
+    uint8_t          *buf, *data, *next;
+    pka_cpu_dmi_hdr_t dmi_hdr;
+    uint32_t          file_len;
+    size_t            file_size;
+
+    buf = pka_cpu_read_sysfs(&file_size, sysfs);
+    if (buf == NULL)
+        return 0;
+
+    file_len = file_size;
+    data     = buf;
+
+    while (data + PKA_DMI_TABLE_LEN <= buf + file_len)
+    {
+
+        /// Copy the header information
+        dmi_hdr.type   = data[PKA_DMI_HEADER_TYPE_OFFSET];
+        dmi_hdr.length = data[PKA_DMI_HEADER_LEN_OFFSET];
+        dmi_hdr.handle = WORD(data + PKA_DMI_HEADER_HANDLE_OFFSET);
+        dmi_hdr.data   = data;
+
+        if (dmi_hdr.length < PKA_DMI_TABLE_LEN)
+        {
+            PKA_ERROR(PKA_CPU, "\nInvalid entry length, DMI table is broken.\n");
+            break;
+        }
+
+        if (dmi_hdr.type == PKA_DMI_TYPE_END)
+            break;
+
+        next = data + dmi_hdr.length;
+        while ((unsigned long)(next - buf + 1) < file_len
+            && (next[0] != 0 || next[1] != 0))
+                next++;
+
+        next += 2;
+
+        if ((unsigned long)(next - buf) > file_len)
+        {
+            PKA_ERROR(PKA_CPU, "\nDMI structure is truncated.\n");
+            break;
+        }
+
+        /// Processor information
+        if (dmi_hdr.type == PKA_DMI_PROC_TYPE)
+        {
+            if (dmi_hdr.length < PKA_DMI_PROC_TABLE_LEN)
+            {
+                PKA_ERROR(PKA_CPU, "\nIncomplete processor information.\n");
+                return 0;
+            }
+            /// Read frequency from offset
+            return WORD(dmi_hdr.data + PKA_DMI_PROC_FREQ_OFFSET);
+        }
+
+        data = next;
+    }
+    return 0;
+}
+
+/// Returns current frequency (in Hz) on successful read from SMBIOS table,
+/// and 0 in case of any errors while reading.
+static uint64_t pka_cpu_get_freq_from_smbios(void)
+{
+    uint16_t freq;
+    uint8_t *buf;
+    size_t   file_size;
+
+    freq = 0;
+
+    buf = pka_cpu_read_sysfs(&file_size, PKA_SYS_SMBIOS_ENTRY_POINT);
+    if (buf != NULL)
+    {
+        if (buf[PKA_SMBIOS_LEN_OFFSET] > PKA_SMBIOS_EXPECTED_LEN)
+        {
+            PKA_ERROR(PKA_CPU, "\n Entry point length exceeds the expected limit.\n");
+            return 0;
+        }
+
+        if (!pka_cpu_checksum(buf, buf[PKA_SMBIOS_LEN_OFFSET]))
+        {
+            PKA_ERROR(PKA_CPU, "\nChecksum mismatch.\n");
+            return 0;
+        }
+
+        freq = pka_cpu_read_dmi_table(PKA_SYS_DMI_TABLE);
+
+        return freq * MEGA;
+    }
+
+    return freq;
+}
 
 /// Returns maximum frequency of specified CPU (in Hz) on success, and 0
 /// on failure
 static inline uint64_t pka_cpu_hz_max_id(int id)
 {
-    if (id >= 0 && id < MAX_CPU_NUMBER)
-        return CPU_HZ_MAX;
-    else
+    if (id < 0 || id >= MAX_CPU_NUMBER)
         return 0;
+
+    /// Below check is to avoid multiple smbios read.
+    if (cpu_f_hz)
+        return cpu_f_hz;
+
+    cpu_f_hz = pka_cpu_get_freq_from_smbios();
+
+    /// Frequency will be zero if reading from smbios fails.
+    if (!cpu_f_hz)
+        cpu_f_hz = CPU_HZ_MAX;
+
+    return cpu_f_hz;
 }
 
 /// Returns maximum frequency of this CPU (in Hz) on success, and 0 on failure.
