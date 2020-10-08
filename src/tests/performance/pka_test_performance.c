@@ -1529,7 +1529,7 @@ static void execute_tests_by_thread(uint32_t        thread_idx,
         //printf("[%d] total_cmds_done=%u - failure_cnt=%u\n",
         //      thread_idx, total_cmds_done, failure_cnt);
 
-        if (failure_cnt > 10)
+        else if (failure_cnt++ > 10)
             break;
 
         if ((cmds_left_to_submit == 0) && (num_cmds == total_cmds_done))
