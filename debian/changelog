@@ -1,3 +1,13 @@
+libpka (1.2-1) UNRELEASED; urgency=low
+
+  * Fix multithreading issue in test framework.
+  * Switch to software method for measuring performance.
+  * Read CPU frequency from SMBIOS table.
+  * Update README file with openssl ecdh, ecdsa and dsa speed test
+    instructions.
+  * Encapsulate pka engine against different openssl versions.
+
+ -- Mahantesh Salimath <mahantesh@nvidia.com>  Fri, 09 Oct 2020 21:13:58 +0000
 libpka (1.1-1) UNRELEASED; urgency=low
 
   * Add ECDH and DH API's in pka library.
