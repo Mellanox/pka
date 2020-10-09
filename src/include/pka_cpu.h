@@ -52,7 +52,6 @@
 
 #include "pka_common.h"
 
-#define PKA_AARCH_64
 #define MAX_CPU_NUMBER 16      // BlueField specific
 
 #define MEGA 1000000
