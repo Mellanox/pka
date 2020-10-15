@@ -1,5 +1,5 @@
 Name: libpka
-Version: 1.0
+Version: 1.2
 Release: 1%{?dist}
 Summary: Mellanox BlueField Public Key Acceleration (PKA) Package
 
@@ -18,8 +18,9 @@ complete interfaces to use with OpenSSL), (2) an API implementation
 for BlueField, (3) validation test suite, an independant set of
 test routines that run against the API implementation and verifies
 that it correctly implements all of the defined APIs at a functional
-level, and (4) a dynamic OpenSSL engine component to support RSA
-operations and interfaces with the BlueField PKA hardware.
+level, and (4) a dynamic OpenSSL engine component to support RSA,
+DSA, DH, ECDH and ECDSA operations and interfaces with the BlueField
+PKA hardware.
 
 %prep
 %setup
