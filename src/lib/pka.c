@@ -164,8 +164,9 @@ static int pka_open_shmem(char *shmem_name)
 {
     uint32_t perms;
     int      shmem_fd;
+    int      ret;
 
-    perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP;
+    perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
     shmem_fd = shm_open(shmem_name, O_RDWR | O_CREAT | O_EXCL, perms);
     if (shmem_fd < 0)
     {
@@ -174,7 +175,12 @@ static int pka_open_shmem(char *shmem_name)
         if (errno == EEXIST)
         {
             // Unlink shared memory
-            shm_unlink(shmem_name);
+            ret = shm_unlink(shmem_name);
+            if (ret < 0)
+            {
+                PKA_DEBUG(PKA_USER, "Shared memory couldn't be removed\n");
+                return -errno;
+            }
             // Create again shared memory
             shmem_fd = shm_open(shmem_name, O_RDWR | O_CREAT | O_EXCL, perms);
         }
@@ -274,12 +280,12 @@ pka_instance_t pka_init_global(const char *name,
                                uint32_t    cmd_queue_size,
                                uint32_t    result_queue_size)
 {
-    uintptr_t       shmem_addr;
-    uint32_t        shmem_size;
-    uint8_t        *shmem_ptr;
-    char            shmem_name[PKA_SHMEM_NAME_SIZE];
-    int             shmem_fd;
-    int             ret;
+    uintptr_t shmem_addr;
+    uint32_t  shmem_size;
+    uint8_t  *shmem_ptr;
+    char     *shmem_name;
+    int       shmem_fd;
+    int       ret;
 
     if ((!flags) || (cmd_queue_size > PKA_QUEUE_MASK_SIZE)  ||
             (result_queue_size > PKA_QUEUE_MASK_SIZE)  ||
@@ -291,9 +297,16 @@ pka_instance_t pka_init_global(const char *name,
         goto exit_error;
     }
 
-    ret = snprintf(shmem_name, sizeof(shmem_name), "/%s%s",
+    shmem_name = malloc(PKA_SHMEM_NAME_SIZE);
+    if (!shmem_name)
+    {
+        PKA_DEBUG(PKA_USER, "memory allocation failed for shared memory\n");
+        goto exit_error;
+    }
+
+    ret = snprintf(shmem_name, PKA_SHMEM_NAME_SIZE, "/%s%s",
                         PKA_SHMEM_PREFIX, name);
-    if (ret < 0 || ret >= (int)sizeof(shmem_name))
+    if (ret < 0 || ret >= PKA_SHMEM_NAME_SIZE)
     {
         PKA_DEBUG(PKA_USER, "name size too long\n");
         errno = ENAMETOOLONG;
@@ -384,7 +397,10 @@ exit_shmem_close:
     PKA_DEBUG(PKA_USER, "close PKA shared memory object\n");
     close(shmem_fd);
     PKA_DEBUG(PKA_USER, "unlink PKA shared memory object\n");
-    shm_unlink(shmem_name);
+    ret = shm_unlink(shmem_name);
+    if (ret < 0)
+        PKA_DEBUG(PKA_USER, "Shared memory couldn't be removed\n");
+    free(shmem_name);
 exit_error:
     return PKA_INSTANCE_INVALID;
 }
@@ -394,6 +410,7 @@ void pka_term_global(pka_instance_t instance)
 {
     char name[PKA_SHMEM_NAME_SIZE];
     int  fd;
+    int  ret;
 
     if (instance == (pka_instance_t) pka_gbl_info->main_pid)
     {
@@ -407,13 +424,16 @@ void pka_term_global(pka_instance_t instance)
 
         fd = pka_gbl_info->shmem_info.fd;
         snprintf(name, sizeof(name), "%s", pka_gbl_info->shmem_info.name);
+        free((char *)pka_gbl_info->shmem_info.name);
 
         PKA_DEBUG(PKA_USER, "munmap PKA shared memory object\n");
         munmap(pka_gbl_info->shmem_info.ptr, pka_gbl_info->shmem_info.size);
         PKA_DEBUG(PKA_USER, "close PKA shared memory object\n");
         close(fd);
         PKA_DEBUG(PKA_USER, "unlink PKA shared memory object\n");
-        shm_unlink(name);
+        ret = shm_unlink(name);
+        if (ret < 0 )
+            PKA_DEBUG(PKA_USER, "Shared memory couldn't be removed\n");
 
         pka_gbl_info = NULL;
     }
