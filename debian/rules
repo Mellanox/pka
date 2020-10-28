@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 %:
-	dh $@ --sourcedirectory=src --with autoreconf
+	dh $@ --with autoreconf
 
 override_dh_auto_install:
 	dh_auto_install

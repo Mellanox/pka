@@ -81,7 +81,6 @@ How to build
 
   1. Build PKA software and documentation:
 
-        # cd <pka_src_dir>
         # ./autogen.sh
         # ./configure
         # make
@@ -115,7 +114,6 @@ How to build
 
     To build the PKA software:
 
-        $ cd <pka_src_dir>
         $ ./autogen.sh
         $ ./configure --host=aarch64-poky-linux --prefix=<pka_install_dir>
         $ make

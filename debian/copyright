@@ -2,61 +2,61 @@ Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: libpka
 Source: https://github.com/Mellanox/pka
 
-Files:     src/engine/helper/pka_helper.c
-           src/engine/helper/pka_helper.h
-           src/include/pka_addrs.h
-           src/include/pka_atomic.h
-           src/include/pka_barrier.h
-           src/include/pka_common.h
-           src/include/pka_config.h
-           src/include/pka_cpu.h
-           src/include/pka_debug.h
-           src/include/pka_firmware.h
-           src/include/pka_ioctl.h
-           src/include/pka_lock.S
-           src/include/pka_mmio.h
-           src/include/pka_types.h
-           src/include/pka_utils.h
-           src/lib/pka.c
-           src/lib/pka_dev.c
-           src/lib/pka_dev.h
-           src/lib/pka_internal.h
-           src/lib/pka_mem.c
-           src/lib/pka_mem.h
-           src/lib/pka_queue.c
-           src/lib/pka_queue.h
-           src/lib/pka_ring.c
-           src/lib/pka_ring.h
-           src/lib/pka_vectors.h
-           src/lib/pka.h
-Copyright: 2016 Mellanox Technologies, Ltd.
+Files:     engine/helper/pka_helper.c
+           engine/helper/pka_helper.h
+           include/pka_addrs.h
+           include/pka_atomic.h
+           include/pka_barrier.h
+           include/pka_common.h
+           include/pka_config.h
+           include/pka_cpu.h
+           include/pka_debug.h
+           include/pka_firmware.h
+           include/pka_ioctl.h
+           include/pka_lock.S
+           include/pka_mmio.h
+           include/pka_types.h
+           include/pka_utils.h
+           lib/pka.c
+           lib/pka_dev.c
+           lib/pka_dev.h
+           lib/pka_internal.h
+           lib/pka_mem.c
+           lib/pka_mem.h
+           lib/pka_queue.c
+           lib/pka_queue.h
+           lib/pka_ring.c
+           lib/pka_ring.h
+           lib/pka_vectors.h
+           lib/pka.h
+Copyright:  Mellanox Technologies, Ltd.
 License:   BSD-3-Clause
 
 Files:     Makefile
            .*
            documentation/pka-programming-doc.pdf
            documentation/pka-architecture-doc.pdf
-           src/Makefile.am
-           src/autogen.sh
-           src/configure.ac
-           src/COPYING
-           src/doc/Doxyfile.in
-           src/doc/Makefile.am
-           src/engine/Makefile.am
-           src/lib/Makefile.am
-           src/libpka.spec
-           src/tests/Makefile.am
-           src/tests/performance/pka_test_performance.c
-           src/tests/pka_test_utils.c
-           src/tests/pka_test_utils.h
-           src/tests/power/pka_test_power.c
-           src/tests/validation/pka_test_validation.c
-           src/tests/validation/pka_test_vectors.h
+           Makefile.am
+           autogen.sh
+           configure.ac
+           COPYING
+           doc/Doxyfile.in
+           doc/Makefile.am
+           engine/Makefile.am
+           lib/Makefile.am
+           libpka.spec
+           tests/Makefile.am
+           tests/performance/pka_test_performance.c
+           tests/pka_test_utils.c
+           tests/pka_test_utils.h
+           tests/power/pka_test_power.c
+           tests/validation/pka_test_validation.c
+           tests/validation/pka_test_vectors.h
            tests/Makefile
 Copyright: __NO_COPYRIGHT_NOR_LICENSE__
 License:   __NO_COPYRIGHT_NOR_LICENSE__
 
-Files:     src/README.engine
+Files:     README.engine
 Copyright: 2016-2018 Mellanox Technologies
 License:   __UNKNOWN__
 
@@ -65,7 +65,7 @@ Copyright: 2016-2018 Mellanox Technologies
 License:   __UNKNOWN__
  License: BSD
 
-Files:     src/engine/e_bluefield.c
+Files:     engine/e_bluefield.c
 Copyright: 2008-2016 The OpenSSL Project Authors.
 License:   __UNKNOWN__
  Licensed under the OpenSSL license (the "License").  You may not use
@@ -73,12 +73,12 @@ License:   __UNKNOWN__
  in the file LICENSE in the source distribution or at
  https://www.openssl.org/source/license.html
 
-Files:     src/README.tests
+Files:     README.tests
 Copyright: 2016-2018 Mellanox Technologies
 License:   __UNKNOWN__
  License: BSD
 
-Files:     src/README
+Files:     README.build
 Copyright: 2016-2018 Mellanox Technologies
 License:   __UNKNOWN__
  License: BSD
@@ -87,7 +87,7 @@ Files:     debian/*
 Copyright: 2020 Mellanox Technologies
 License: GPL-2+
 
-Files:     src/engine/helper/ec_local.h
+Files:     engine/helper/ec_local.h
 Copyright: 2001-2019 The OpenSSL Project Authors.
            2002, Oracle and/or its affiliates.
 License:   OpenSSL

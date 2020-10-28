@@ -106,36 +106,28 @@ documentation/
   the design and the implementation of the API. It covers most of
   the API concepts in case customers wish to use it directly.
 
-src/
-  Various sources and header files for the PKA library as well as a
-  userspace API to allow programmers to code their own applications.
+doc/
+  Configuration file for doxygen documentation.
 
-    doc/
-      Configuration file for doxygen documentation.
+engine/
+  Source file of the OpenSSL engine and its associated helper
+  files to integrate with the BlueField PKA library.
 
-    engine/
-      Source file of the OpenSSL engine and its associated helper
-      files to integrate with the BlueField PKA library.
+include/
+  Various helpers and header files used by the library sources
+  as well as the BlueField PK driver module.
 
-    include/
-      Various helpers and header files used by the library sources
-      as well as the BlueField PK driver module.
+lib/
+  Complete sources and header files, including the userspace API
+  (i.e., pka.h) as well as the library implementation.  Sources
+  are built as a shared library which might be used by userspace
+  applications.
 
-    lib/
-      Complete sources and header files, including the userspace API
-      (i.e., pka.h) as well as the library implementation.  Sources
-      are built as a shared library which might be used by userspace
-      applications.
-
-    samples/
-      This directory has a sample application that presents a basic
-      example of a userspace application.
-
-    tests/
-      Test suite to provide a comprehensive set of API validation
-      tests that are intended to be used to verify whether the
-      implementation meets the design requirements. It also includes
-      additional tests which might be used for power tests.
+tests/
+  Test suite to provide a comprehensive set of API validation
+  tests that are intended to be used to verify whether the
+  implementation meets the design requirements. It also includes
+  additional tests which might be used for power tests.
 
 ===============================================================================
 Naming convention
@@ -153,13 +145,13 @@ instance, if a function belongs to 'pka_dev.c', it should be called
 How to build
 ===============================================================================
 
-Look in 'src/README' for the list of build dependencies and for more
+Look in 'README.build' for the list of build dependencies and for more
 detail on how to build.
 
-Directory 'src/tests' contains test applications for BlueField PKA API
+Directory 'tests' contains test applications for BlueField PKA API
 calls and features support.
 
-In general you can build, from the source directory 'src':
+In general you can build:
 
     ./autogen.sh
     ./configure
