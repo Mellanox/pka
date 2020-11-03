@@ -111,65 +111,28 @@ static uint32_t verbosity = 0;
 static pka_barrier_t thread_start_barrier;
 static pka_barrier_t thread_end_barrier;
 
-// *FIXME*
-#ifdef ARMV8_PMU_ENABLE
-#define ARMV8_PMEVTYPER_EVTCOUNT_MASK 0x3FF
-static __pka_inline uint64_t pm_get_cycles()
+static __pka_inline uint64_t pka_get_ticks(void)
 {
-    uint64_t cycle_cnt;
+    uint64_t tick_cnt64;
+
     // Read counter
-    asm volatile("mrs %0, pmccntr_el0" : "=r" (cycle_cnt));
-    return cycle_cnt;
+    asm volatile("mrs %0, cntvct_el0" : "=r" (tick_cnt64));
+    return tick_cnt64;
 }
-static __pka_inline uint64_t pm_read()
+
+static __pka_inline uint64_t pka_get_hz_ticks(void)
 {
-    uint64_t cycle_cnt;
+    uint64_t freq_64;
+
     // Read counter
-    asm volatile("mrs %0, pmevcntr0_el0" : "=r" (cycle_cnt));
-    return cycle_cnt;
-}
-static __pka_inline void pm_enable(void)
-{
-    //
-    // Setup PMU counter to record specific event
-    // evtCount is the event id
-    //
-    uint32_t evtCount = ARMV8_PMEVTYPER_EVTCOUNT_MASK;
-    asm volatile("isb");
-    //
-    // Just use counter 0 here
-    //
-    asm volatile("msr pmevtyper0_el0, %0" : : "r" (evtCount));
-    //
-    // Performance Monitors Count Enable Set register bit 30:1 disable,
-    // bit 31,1 enable.
-    //
-    uint32_t r = 0;
-    uint64_t zero = 0;
-
-    asm volatile("mrs %0, pmcntenset_el0" : "=r" (r));
-    asm volatile("msr pmcntenset_el0, %0" : : "r" (r|0x80000001));
-    asm volatile("msr pmccntr_el0,    %0" : : "r" (zero));
+    asm volatile("mrs %0, cntfrq_el0" : "=r" (freq_64));
+    return freq_64;
 }
 
-static __pka_inline void pm_disable()
-{
-    //
-    // Disable PMU counter 0. Performance Monitors Count Enable Set
-    // register: clear bit 0.
-    //
-    uint32_t r = 0;
-
-    asm volatile("mrs %0, pmcntenset_el0" : "=r" (r));
-    asm volatile("msr pmcntenset_el0, %0" : : "r" (r&0x7ffffffe));
-}
-#define pka_get_cycle_cnt() pm_get_cycles()
-#else
 #define pm_enable() do {} while(0)
 #define pm_disable() do {} while(0)
-#define pka_get_cycle_cnt() pka_cpu_cycles()
-#endif
-#define pka_get_cpu_freq()  pka_cpu_hz_max()
+#define pka_get_cycle_cnt() pka_get_ticks()
+#define pka_get_cpu_freq()  pka_get_hz_ticks()
 
 #define PKA_MAX_OBJS                16          // 16  objs
 #define PKA_CMD_DESC_MAX_DATA_SIZE  (1 << 14)   // 16K bytes.
@@ -1412,14 +1375,15 @@ static bool process_pka_test_results(pka_handle_t   handle,
     else
         status = SUCCESS;
 
-    if (status == SUCCESS)
-        test_stats->num_correct_answers++;
-    else
+    if (status != SUCCESS)
     {
+        printf("%s: Wrong answer\n", __func__);
         test_stats->num_wrong_answers++;
         test_stats->errors++;
+        return true;
     }
 
+    test_stats->num_correct_answers++;
     latency = (test_end_time - user_data_ptr->start_time) / 256;
     test_stats->total_latency   += latency;
     test_stats->latency_squared += latency * latency;
@@ -1448,6 +1412,7 @@ static void execute_tests_by_thread(uint32_t        thread_idx,
     pka_results_t *results;
     user_data_t   *user_data_ptr, user_data[256];
     uint64_t       thread_start_time, thread_end_time, test_end_time;
+    uint64_t       current_time, duration;
     uint32_t       outstanding_cmds, failure_cnt;
     uint32_t       total_cmds_done, num_cmds, test_idx, test_desc_idx;
     uint32_t       total_cmds_submitted, user_data_idx, cmds_left_to_submit;
@@ -1460,6 +1425,8 @@ static void execute_tests_by_thread(uint32_t        thread_idx,
         return;
     }
 
+    // Wait here for all threads to be ready.
+    pka_barrier_wait(&thread_start_barrier);
     memset(user_data, 0, sizeof (user_data));
     for (user_data_idx = 0;  user_data_idx < 256;  user_data_idx++)
     {
@@ -1479,6 +1446,7 @@ static void execute_tests_by_thread(uint32_t        thread_idx,
 
     //printf("[%d] num_cmds=%u - cmds_outstanding=%u\n",
     //       thread_idx, num_cmds, cmds_outstanding);
+    test_end_time = pka_get_cycle_cnt();
 
     while(true)
     {
@@ -1526,11 +1494,20 @@ static void execute_tests_by_thread(uint32_t        thread_idx,
                 busy_delay();
         }
 
+        else
+        {
+            current_time = pka_get_cycle_cnt();
+            duration     = current_time - test_end_time;
+            // Break out if no result is received for a long time.
+            if (duration > CPU_HZ_MAX)
+            {
+                printf("%s: No results for a LONG time\n", __func__);
+                thread_state->thread_stats.errors++;
+                break;
+            }
+        }
         //printf("[%d] total_cmds_done=%u - failure_cnt=%u\n",
         //      thread_idx, total_cmds_done, failure_cnt);
-
-        else if (failure_cnt++ > 10)
-            break;
 
         if ((cmds_left_to_submit == 0) && (num_cmds == total_cmds_done))
             break;
@@ -1538,6 +1515,7 @@ static void execute_tests_by_thread(uint32_t        thread_idx,
 
     thread_end_time             = pka_get_cycle_cnt();
     thread_state->thread_cycles = thread_end_time - thread_start_time;
+    pka_barrier_wait(&thread_end_barrier);
     pka_term_local(handle);
 }
 
@@ -1556,14 +1534,10 @@ static void *pka_test_thread(void *arg)
         printf("%s worker_cpu=%u currently running on cpu=%u\n",
                __func__, thread_arg_ptr->cpu_number, sched_getcpu());
 
-    // Wait here for all threads to be ready.
-    pka_barrier_wait(&thread_start_barrier);
-
     thread_states[thread_idx].start_cycles = pka_get_cycle_cnt();
     execute_tests_by_thread(thread_idx, &thread_states[thread_idx]);
     thread_states[thread_idx].end_cycles = pka_get_cycle_cnt();
 
-    pka_barrier_wait(&thread_end_barrier);
     pm_disable();
 
     pka_mf();
@@ -1746,20 +1720,21 @@ static void analyze_results (void)
             num         = test_stats->num_cmd_submits;
             bad_results = test_stats->errors;
 
-            thread_stats->num_cmd_submits += num;
-            thread_stats->errors          += bad_results;
-            thread_stats->total_latency   += test_stats->total_latency;
-            thread_stats->latency_squared += test_stats->latency_squared;
-            thread_stats->min_latency      = MIN(thread_stats->min_latency,
-                                                 test_stats->min_latency);
-            thread_stats->max_latency      = MAX(thread_stats->max_latency,
-                                                 test_stats->max_latency);
+            thread_stats->num_cmd_submits     += num;
+            thread_stats->errors              += bad_results;
+            thread_stats->num_correct_answers += test_stats->num_correct_answers;
+            thread_stats->total_latency       += test_stats->total_latency;
+            thread_stats->latency_squared     += test_stats->latency_squared;
+            thread_stats->min_latency          = MIN(thread_stats->min_latency,
+                                                     test_stats->min_latency);
+            thread_stats->max_latency          = MAX(thread_stats->max_latency,
+                                                     test_stats->max_latency);
 
             if (num != 0)
                 update_test_stats(test_stats, num);
         }
 
-        num = thread_stats->num_cmd_submits;
+        num = thread_stats->num_correct_answers;
 
         overall_cmds_done                  += num;
         overall_bad_results                += thread_stats->errors;
@@ -1826,7 +1801,7 @@ static void report_per_thread_results(void)
         microsecs64  = (1000000 * thread_state->thread_cycles) / cpu_freq;
         millisecs64  = microsecs64 / 1000;
         usecs_rem    = (uint32_t) (microsecs64 - (millisecs64 * 1000));
-        num_cmds     = thread_stats->num_cmd_submits;
+        num_cmds     = thread_stats->num_correct_answers;
         cmds_per_sec = (uint32_t) ((1000000 * (uint64_t) num_cmds) /
                                    microsecs64);
 
