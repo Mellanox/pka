@@ -113,4 +113,19 @@ typedef struct // Bluefield specific ring information
 /// Return: 0 on success, -errno on failure.
 #define PKA_CLEAR_RING_COUNTERS  _IO(PKA_IOC_TYPE, 0x2)
 
+/// PKA_GET_RANDOM_BYTES - _IOWR(PKA_IOC_TYPE, 0x3, pka_dev_trng_info_t)
+///
+/// Get random bytes from True Random Number Generator(TRNG).
+/// Return: 0 on success, -errno on failure.
+typedef struct // True Random Number Generator information
+{
+    /// Number of random bytes in the buffer; Length of the buffer.
+    uint32_t count;
+
+    /// Data buffer to hold the random bytes.
+    uint8_t *data;
+
+} pka_dev_trng_info_t;
+#define PKA_GET_RANDOM_BYTES  _IOWR(PKA_IOC_TYPE, 0x3, pka_dev_trng_info_t)
+
 #endif // __PKA_IOCTL_H__

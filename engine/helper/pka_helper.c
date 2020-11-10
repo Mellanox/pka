@@ -76,7 +76,7 @@ static __thread pka_handle_t tls_handle;
 static uint32_t gbl_engine_init;
 static uint32_t gbl_engine_finish;
 
-#define DEBUG_MODE    0xf
+#define DEBUG_MODE    0x1
 #define PKA_D_ERROR   0x1
 #define PKA_D_INFO    0x8
 
@@ -974,6 +974,24 @@ int  pka_bn_mod_inv(pka_bignum_t *bn_value,
 
     return rc;
 }
+
+int pka_get_random_bytes(uint8_t *buf,
+                         int      len)
+{
+    int rc;
+
+    PKA_ASSERT(buf != NULL);
+    PKA_ASSERT(len > 0);
+
+    return_if_handle_invalid(tls_handle);
+
+    rc = pka_get_rand_bytes(tls_handle, buf, len);
+
+    DEBUG(PKA_D_INFO, "Read %d random bytes\n", rc);
+
+    return rc;
+}
+
 int pka_init(void)
 {
     int ret;

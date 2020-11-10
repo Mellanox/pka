@@ -43,6 +43,7 @@
 ///
 
 #ifdef __KERNEL__
+#include <linux/mutex.h>
 #include <linux/types.h>
 #include "pka_firmware.h"
 #else
@@ -195,6 +196,10 @@ struct pka_dev_shim_s
                                           ///  enabled.
 
     int8_t              status;           ///< status of the shim
+
+#ifdef __KERNEL__
+    struct mutex        mutex;            ///< mutex lock for sharing shim
+#endif
 };
 
 /// defines for pka_dev_shim->status
