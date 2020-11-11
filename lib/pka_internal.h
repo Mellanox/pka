@@ -136,8 +136,8 @@ typedef struct
 
 typedef struct
 {
-    pka_cmd_stats_t cmd_stats[256]; ///< stats entry
-    uint8_t         index;          ///< index in 0 .. 255.
+    pka_cmd_stats_t cmd_stats[4096]; ///< stats entry
+    uint16_t        index:12;        ///< index in 0 .. 4095, wrapping is permitted.
 } pka_cmd_stats_db_t;
 
 static pka_cmd_stats_db_t pka_cmd_stats_db[PKA_MAX_QUEUES_NUM];

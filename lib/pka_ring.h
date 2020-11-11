@@ -278,8 +278,8 @@ typedef struct
 // Note that a data base should be associated with a hardware ring.
 typedef struct
 {
-    pka_udata_info_t entries[32]; // user data information entries.
-    uint8_t          index   : 5; // entry index. Wrapping is permitted.
+    pka_udata_info_t entries[256]; // user data information entries.
+    uint8_t          index;        // entry index. Wrapping is permitted.
 } pka_udata_db_t;
 
 #ifndef __KERNEL__

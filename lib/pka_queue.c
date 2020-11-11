@@ -661,7 +661,7 @@ int pka_queue_cmd_enqueue(pka_queue_t          *queue,
 
         // Save the operand buffer pointer and reset the operand buffer address.
         operand_buf_ptr  = operand->buf_ptr;
-        operand_buf_addr = prod_head + sizeof(pka_operand_t);
+        operand_buf_addr = (prod_head + sizeof(pka_operand_t)) & queue->mask;
         operand->buf_ptr = (uint8_t *)(queue->mem + operand_buf_addr);
 
         // copy the operand information.
@@ -687,9 +687,11 @@ int pka_queue_rslt_enqueue(pka_queue_t             *queue,
 {
     pka_operand_t *rslt1_ptr;
     pka_operand_t *rslt2_ptr;
+    pka_operand_t  rslt_op_tmp;
     uint32_t       prod_head, prod_next, free_entries;
     uint32_t       total_size, queue_size, queue_mask, rslt_desc_size;
     uint32_t       result_cnt, result1_offset, result2_offset;
+    uint32_t       size_left;
 
     if (queue->flags != PKA_QUEUE_TYPE_RSLT)
         return -EPERM;
@@ -721,30 +723,61 @@ int pka_queue_rslt_enqueue(pka_queue_t             *queue,
     result2_offset &= queue_mask;
 
     result_cnt      = rslt_desc->result_cnt;
-
     switch (result_cnt)
     {
     case 2:
         rslt2_ptr             = (pka_operand_t *) (queue->mem + result2_offset);
-        memset(rslt2_ptr, 0, sizeof(pka_operand_t));
-        rslt2_ptr->big_endian = PKA_RING_BYTE_ORDER;
-        rslt2_ptr->actual_len = rslt_desc->result2_len;
-        rslt2_ptr->buf_len    = rslt_desc->result2_len;
-        result2_offset       += sizeof(pka_operand_t);
-        result2_offset       &= queue_mask;
-        if (rslt2_ptr->actual_len)
-            rslt2_ptr->buf_ptr    = (uint8_t *) (queue->mem + result2_offset);
+        memset(&rslt_op_tmp, 0, sizeof(pka_operand_t));
+        rslt_op_tmp.big_endian = PKA_RING_BYTE_ORDER;
+        rslt_op_tmp.actual_len = rslt_desc->result2_len;
+        rslt_op_tmp.buf_len    = rslt_desc->result2_len;
+        result2_offset         += sizeof(pka_operand_t);
+        result2_offset         &= queue_mask;
+        if (rslt_op_tmp.actual_len)
+            rslt_op_tmp.buf_ptr = (uint8_t *) (queue->mem + result2_offset);
+
+        // Copy pka operand info from temporary buffer to the queue memory.
+        size_left = ((uint8_t *)queue->mem + queue->size) - (uint8_t *)rslt2_ptr;
+
+        if (size_left >= sizeof(pka_operand_t))
+        {
+            // If there is enough space, Copy completely.
+            memcpy(rslt2_ptr, &rslt_op_tmp, sizeof(pka_operand_t));
+        }
+        else
+        {
+            // Copy chunkwise and wrap around if we are crossing the queue boundary
+            memcpy(rslt2_ptr, &rslt_op_tmp, size_left);
+            memcpy(&queue->mem[0], (uint8_t *)&rslt_op_tmp + size_left,
+                sizeof(pka_operand_t) - size_left);
+        }
         // fall-through
     case 1:
         rslt1_ptr             = (pka_operand_t *) (queue->mem + result1_offset);
-        memset(rslt1_ptr, 0, sizeof(pka_operand_t));
-        rslt1_ptr->big_endian = PKA_RING_BYTE_ORDER;
-        rslt1_ptr->actual_len = rslt_desc->result1_len;
-        rslt1_ptr->buf_len    = rslt_desc->result1_len;
-        result1_offset       += sizeof(pka_operand_t);
-        result1_offset       &= queue_mask;
-        if (rslt1_ptr->actual_len)
-            rslt1_ptr->buf_ptr    = (uint8_t *) (queue->mem + result1_offset);
+        memset(&rslt_op_tmp, 0, sizeof(pka_operand_t));
+        rslt_op_tmp.big_endian = PKA_RING_BYTE_ORDER;
+        rslt_op_tmp.actual_len = rslt_desc->result1_len;
+        rslt_op_tmp.buf_len    = rslt_desc->result1_len;
+        result1_offset         += sizeof(pka_operand_t);
+        result1_offset         &= queue_mask;
+        if (rslt_op_tmp.actual_len)
+            rslt_op_tmp.buf_ptr = (uint8_t *) (queue->mem + result1_offset);
+
+        // Copy pka operand info from temporary buffer to the queue memory.
+        size_left = ((uint8_t *)queue->mem + queue->size) - (uint8_t *)rslt1_ptr;
+
+        if (size_left >= sizeof(pka_operand_t))
+        {
+            // If there is enough space, Copy completely.
+            memcpy(rslt1_ptr, &rslt_op_tmp, sizeof(pka_operand_t));
+        }
+        else
+        {
+            // Copy chunkwise and wrap around if we are crossing the queue boundary
+            memcpy(rslt1_ptr, &rslt_op_tmp, size_left);
+            memcpy(&queue->mem[0], (uint8_t *)&rslt_op_tmp + size_left,
+                sizeof(pka_operand_t) - size_left);
+        }
     }
 
     // Write the result operands information and data.
@@ -803,6 +836,7 @@ int pka_queue_cmd_dequeue(pka_queue_t            *queue,
                           pka_ring_alloc_t       *alloc)
 {
     pka_queue_cmd_desc_t *cmd_desc;
+    pka_queue_cmd_desc_t  cmd_desc_tmp;
     pka_operand_t         operands[MAX_OPERAND_CNT];
     pka_operand_t        *operand;
     uint32_t              cons_head, cons_next, entries;
@@ -819,7 +853,19 @@ int pka_queue_cmd_dequeue(pka_queue_t            *queue,
     // One might just read 32bits using a 'uint32_t *' but for calirity we
     // cast the addresse in the queue.
     cons_head     = queue->cons.head;
-    cmd_desc      = (pka_queue_cmd_desc_t *) &queue->mem[cons_head];
+    // Read the queue memory carefully, adjust and wrap around if needed.
+    if (cons_head + sizeof(pka_queue_cmd_desc_t) < queue->size)
+    {
+        cmd_desc = (pka_queue_cmd_desc_t *) &queue->mem[cons_head];
+    }
+    else
+    {
+        first_chunk = queue->size - cons_head;
+        memcpy(&cmd_desc_tmp, &queue->mem[cons_head], first_chunk);
+        memcpy((uint8_t *)&cmd_desc_tmp + first_chunk, &queue->mem[0],
+            sizeof(pka_queue_cmd_desc_t) - first_chunk);
+        cmd_desc = &cmd_desc_tmp;
+    }
 
     total_size = pka_queue_move_cons_head(queue, cmd_desc->size,
                                         &cons_head, &cons_next, &entries);
@@ -847,7 +893,7 @@ int pka_queue_cmd_dequeue(pka_queue_t            *queue,
         {
             first_chunk = queue->size - (cons_head & queue->mask);
             memcpy(&operands[operand_idx], operand, first_chunk);
-            memcpy(&operands[operand_idx] + first_chunk, &queue->mem[0],
+            memcpy((uint8_t *)&operands[operand_idx] + first_chunk, &queue->mem[0],
                         sizeof(pka_operand_t) - first_chunk);
         }
 
@@ -870,9 +916,11 @@ int pka_queue_rslt_dequeue(pka_queue_t            *queue,
 {
     pka_queue_rslt_desc_t *dummy_rslt_desc; // used to avoid breaking strict
                                             // aliasing rule.
+    pka_queue_rslt_desc_t  rslt_desc_tmp; // used to avoid breaking strict
     pka_operand_t         *result;
     uint32_t               cons_head, cons_next, entries, total_size;
     uint32_t               rslt_desc_size, result_idx, result_cnt;
+    uint32_t               first_chunk;
     uint8_t               *buf_ptr;
 
     if (queue->flags != PKA_QUEUE_TYPE_RSLT)
@@ -883,8 +931,18 @@ int pka_queue_rslt_dequeue(pka_queue_t            *queue,
     // One might just read 32bits using a 'uint32_t *' but for calirity we
     // cast the addresse in the queue.
     cons_head       = queue->cons.head;
-    dummy_rslt_desc = (pka_queue_rslt_desc_t *) &queue->mem[cons_head];
-    rslt_desc_size  = dummy_rslt_desc->size;
+    if (cons_head + sizeof(pka_queue_rslt_desc_t) < queue->size)
+    {
+        dummy_rslt_desc = (pka_queue_rslt_desc_t *) &queue->mem[cons_head];
+    }
+    else
+    {
+        first_chunk = queue->size - cons_head;
+        memcpy(&rslt_desc_tmp, &queue->mem[cons_head], first_chunk);
+        memcpy((uint8_t *)&rslt_desc_tmp + first_chunk, &queue->mem[0],
+            sizeof(pka_queue_rslt_desc_t) - first_chunk);
+        dummy_rslt_desc = &rslt_desc_tmp;
+    }
 
     total_size = pka_queue_move_cons_head(queue, dummy_rslt_desc->size,
                                             &cons_head, &cons_next, &entries);
