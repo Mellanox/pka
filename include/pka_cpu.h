@@ -138,7 +138,7 @@ static void *pka_cpu_read_sysfs(size_t *file_len, const char *filename)
     fd = open(filename, O_RDONLY);
     if (fd == -EPERM)
     {
-        PKA_ERROR(PKA_CPU, "\nOpening file failed with error:%d.\n", errno);
+        PKA_DEBUG(PKA_USER, "\nOpening file failed with error:%d.\n", errno);
         return NULL;
     }
 
