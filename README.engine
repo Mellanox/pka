@@ -27,7 +27,7 @@ Important Notes
     the PKA engine is pre-installed:
 
         On Yocto Poky systems, the engine is installed into
-        '/usr/lib64/engines/libbfengine.so'
+        '/usr/lib64/engines-1.1/libbfengine.so'
 
         On CentOS systems, the engine is installed into
         '/usr/lib64/libbfengine.so.1.0.0'
@@ -35,17 +35,20 @@ Important Notes
         On Ubuntu systems, the engine is installed into
         '/usr/lib/aarch64-linux-gnu/libbfengine.so.1.0.0'
 
+        On Debian systems, the engine is installed into
+        '/usr/lib/aarch64-linux-gnu/libbfengine.so.1.0.0'
+
     Users are invited to install the shared object file into the
     appropriate destination directory within the OpenSSL engine folder,
     if needed. This depends on OpennSSL installation and settings.
 
   * The PKA engine requires OpenSSL libraries, such as libcrypto and
-    libssl. Note that Yocto Poky, CentOS and Ubuntu systems have a pre-
+    libssl. Note that Yocto Poky, CentOS, Debian and Ubuntu systems have a pre-
     installed openssl package:
 
         On Yocto Poky systems:
         # openssl version
-        OpenSSL 1.0.2m  2 Nov 2017
+        OpenSSL 1.1.1g  21 Apr 2020
 
         On CentOS systems:
         # openssl version
@@ -53,7 +56,11 @@ Important Notes
 
         On Ubuntu systems:
         # openssl version
-        OpenSSL 1.1.0g  2 Nov 2017
+        OpenSSL 1.1.1f  31 Mar 2020
+
+        On Debian systems:
+        # openssl version
+        OpenSSL 1.1.1d  10 Sep 2019
 
     For native compilation, simply load the necessary libraries using
     the appropriate tool set.
@@ -95,18 +102,24 @@ How to install
   installed within the correct directory.
 
         On Yocto Poky, the engine module is installed into
-        '/usr/lib64/engines/libpka.so'
+        '/usr/lib64/engines-1.1/pka.so'
 
         On CentOS, the engine module is installed into
         '/usr/lib64/openssl/engines/libpka.so'
 
+        On Ubuntu, the engine module is installed into
+        '/usr/lib/aarch64-linux-gnu/engines-1.1/pka.so'
+
+        On Debian, the engine module is installed into
+        '/usr/lib/aarch64-linux-gnu/engines-1.1/pka.so'
+
   If needed, install the engine module to OpenSSL 'engines' directory.
 
-        On Yocto Poky systems running default OpenSSL 1.0.2m:
+        On Yocto Poky systems running default OpenSSL 1.1.1g:
         # cd <pka_install_dir>/lib
-        # cp libbfengine.so.1.0.0 /usr/lib64/engines/
-        # cd /usr/lib64/engines/
-        # ln -s libbfengine.so.1.0.0 libpka.so
+        # cp libbfengine.so.1.0.0 /usr/lib64/engines-1.1/
+        # cd /usr/lib64/engines-1.1/
+        # ln -s libbfengine.so.1.0.0 pka.so
 
         On CentOS systems running default OpenSSL 1.0.2k-fips:
         # cd <pka_install_dir>/lib
@@ -114,7 +127,13 @@ How to install
         # cd /usr/lib64/openssl/engines/
         # ln -s libbfengine.so.1.0.0 libpka.so
 
-        On Ubuntu systems running default OpenSSL 1.1.0g:
+        On Ubuntu systems running default OpenSSL 1.1.1f:
+        # cd <pka_install_dir>/lib
+        # cp libbfengine.so.1.0.0 /usr/lib/aarch64-linux-gnu/engines-1.1/
+        # cd /usr/lib/aarch64-linux-gnu/engines-1.1/
+        # ln -s libbfengine.so.1.0.0 pka.so
+
+        On Debian systems running default OpenSSL 1.1.1d:
         # cd <pka_install_dir>/lib
         # cp libbfengine.so.1.0.0 /usr/lib/aarch64-linux-gnu/engines-1.1/
         # cd /usr/lib/aarch64-linux-gnu/engines-1.1/
@@ -134,8 +153,8 @@ How to load
   To load the BlueField PKA engine module into OpenSSL:
 
     On Yocto Poky systems:
-    # openssl engine -t dynamic \
-    > -pre SO_PATH:/usr/lib64/engines/libpka.so \
+    # openssl engine dynamic \
+    > -pre SO_PATH:/usr/lib64/engines-1.1/pka.so \
     > -pre ID:pka -pre LOAD
     (dynamic) Dynamic engine loading support
     [Success]: SO_PATH:/usr/lib64/engines/libpka.so
@@ -166,6 +185,17 @@ How to load
     Loaded: (pka) BlueField PKA engine support
          [ available ]
 
+    On Debian systems:
+    # openssl engine dynamic \
+    > -pre SO_PATH:/usr/lib/aarch64-linux-gnu/engines-1.1/pka.so \
+    > -pre ID:pka -pre LOAD
+    (dynamic) Dynamic engine loading support
+    [Success]: SO_PATH:/usr/lib/aarch64-linux-gnu/engines-1.1/pka.so
+    [Success]: ID:pka
+    [Success]: LOAD
+    Loaded: (pka) BlueField PKA engine support
+         [ available ]
+
   Note that the option '-t' is omitted when working with OpenSSL 1.1,
   since this cannot be used with option 'engine'.
 
@@ -177,15 +207,27 @@ How to load
 
   Examples:
 
+    1. RSA
     # openssl speed -engine pka rsa512
     engine "pka" set.
     ...
+
+    2. DSA
     # openssl speed -engine pka dsa512
     engine "pka" set.
     ...
+
+    3. ECDH
     # openssl speed -engine pka ecdhp256
     engine "pka" set.
     ...
+
+    4. ECDSA
     # openssl speed -engine pka ecdsap256
+    engine "pka" set.
+    ...
+
+    5. Random number generation (RNG)
+    # openssl rand -engine pka 512
     engine "pka" set.
     ...
