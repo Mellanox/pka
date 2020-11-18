@@ -141,6 +141,11 @@ int pka_bn_mod_inv(pka_bignum_t *bn_value,
                    pka_bignum_t *bn_modulus,
                    pka_bignum_t *bn_result);
 
+// This function implements the random number generation using BlueField
+// PKA hardware.
+int pka_get_random_bytes(uint8_t *buf,
+                         int      len);
+
 #ifdef  __cplusplus
 }
 #endif

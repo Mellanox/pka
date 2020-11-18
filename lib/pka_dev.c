@@ -1313,6 +1313,7 @@ static int pka_dev_init_shim(pka_dev_shim_t *shim)
         shim->trng_enabled = PKA_SHIM_TRNG_DISABLED;
     }
 
+    mutex_init(&shim->mutex);
     shim->busy_ring_num  = 0;
     shim->status         = PKA_SHIM_STATUS_INITIALIZED;
 
@@ -1620,18 +1621,26 @@ int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
     if (!cnt)
         return ret;
 
+    mutex_lock(&shim->mutex);
+
     trng_csr_ptr = &shim->resources.trng_csr;
 
     if (trng_csr_ptr->status != PKA_DEV_RES_STATUS_MAPPED ||
             trng_csr_ptr->type != PKA_DEV_RES_TYPE_REG)
+    {
+        mutex_unlock(&shim->mutex);
         return -EPERM;
+    }
 
     csr_reg_base = trng_csr_ptr->base;
     csr_reg_ptr  = trng_csr_ptr->ioaddr;
 
     if (!pka_dev_trng_shutdown_oflo(trng_csr_ptr,
                                     &shim->trng_err_cycle))
+    {
+        mutex_unlock(&shim->mutex);
         return -EWOULDBLOCK;
+    }
 
     // Determine the number of 32-bit words.
     word_cnt = cnt >> 2;
@@ -1665,6 +1674,7 @@ int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
                 PKA_DEBUG(PKA_DEV,
                     "Shim %u got error obtaining random number\n",
                                 shim->shim_id);
+                mutex_unlock(&shim->mutex);
                 return -EBUSY;
             }
         }
@@ -1676,6 +1686,7 @@ int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
         data[data_idx] = (uint32_t) csr_reg_value;
     }
 
+    mutex_unlock(&shim->mutex);
     return ret;
 }
 

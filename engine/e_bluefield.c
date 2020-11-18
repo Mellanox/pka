@@ -20,6 +20,7 @@
 #include <openssl/evp.h>
 #include <openssl/bn.h>
 #include <openssl/crypto.h>
+#include <openssl/rand.h>
 #include <openssl/ssl.h>
 #include <openssl/modes.h>
 #include <openssl/ossl_typ.h>
@@ -74,6 +75,20 @@ static int engine_pka_dh_bn_mod_exp(const DH *dh, BIGNUM *r, const BIGNUM *a,
                                     BN_CTX *ctx, BN_MONT_CTX *m_ctx);
 static int engine_pka_dh_init(DH *dh);
 static int engine_pka_dh_finish(DH *dh);
+#endif
+
+/* RAND stuff */
+#ifndef NO_RAND
+static int engine_pka_get_random_bytes(unsigned char *buf, int num);
+static int engine_pka_random_status(void);
+static RAND_METHOD pka_rand_meth = {
+    NULL,
+    engine_pka_get_random_bytes,
+    NULL,
+    NULL,
+    engine_pka_get_random_bytes,
+    engine_pka_random_status
+};
 #endif
 
 # if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
@@ -179,7 +194,6 @@ static EC_KEY_METHOD        *pka_ec_key_meth = NULL;
 static const EC_KEY_METHOD  *ec_key_meth     = NULL;
 #endif /* EC */
 
-/* rand stuff */
 # else // OpenSSL >=1.0.0 && < 1.0.1
 /* RSA stuff */
 #ifndef NO_RSA
@@ -357,6 +371,13 @@ static int bind_pka(ENGINE *e)
 
 #endif /* EC */
 
+#ifndef NO_RAND
+    const RAND_METHOD *rand_meth = RAND_OpenSSL();
+    pka_rand_meth.seed = rand_meth->seed;
+    pka_rand_meth.cleanup = rand_meth->cleanup;
+    pka_rand_meth.add = rand_meth->add;
+#endif
+
 # else // OpenSSL >=1.0.0 && < 1.0.1
 #ifndef NO_RSA
     /*
@@ -396,10 +417,19 @@ static int bind_pka(ENGINE *e)
     pka_dh_meth.compute_key  = dh_meth->compute_key;
 #endif
     /* Setup our RAND_METHOD that we provide pointers to */
+#ifndef NO_RAND
+    const RAND_METHOD *rand_meth = RAND_SSLeay();
+    pka_rand_meth.seed = rand_meth->seed;
+    pka_rand_meth.cleanup = rand_meth->cleanup;
+    pka_rand_meth.add = rand_meth->add;
+#endif
 # endif
 
     if (rc != ENGINE_set_id(e, engine_pka_id)
         || rc != ENGINE_set_name(e, engine_pka_name)
+#ifndef NO_RAND
+        || rc != ENGINE_set_RAND(e, &pka_rand_meth)
+#endif
 # if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 #ifndef NO_RSA
         || rc != ENGINE_set_RSA(e, pka_rsa_meth)
@@ -533,6 +563,37 @@ end:
     BN_free(result);
     return rc;
 }
+
+#ifndef NO_RAND
+static int
+engine_pka_get_random_bytes(unsigned char *buf, int num)
+{
+    unsigned char *pka_buf;
+    int            ret;
+
+    if (buf == NULL || num <= 0)
+        return 0;
+
+    pka_buf = calloc(num, sizeof(unsigned char));
+    if (pka_buf == NULL)
+    {
+        printf("ERROR: Buffer memory allocation failed.\n");
+        return 0;
+    }
+
+    ret = pka_get_random_bytes(pka_buf, num);
+    memcpy(buf, pka_buf, num);
+
+    free(pka_buf);
+    return (num == ret) ? 1 : 0;
+}
+
+static int
+engine_pka_random_status(void)
+{
+    return 1;
+}
+#endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 /* BN_mod_inv */
