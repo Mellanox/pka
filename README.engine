@@ -30,13 +30,13 @@ Important Notes
         '/usr/lib64/engines-1.1/libbfengine.so'
 
         On CentOS systems, the engine is installed into
-        '/usr/lib64/libbfengine.so.1.0.0'
+        '/usr/lib64/libbfengine.so.1.1.0'
 
         On Ubuntu systems, the engine is installed into
-        '/usr/lib/aarch64-linux-gnu/libbfengine.so.1.0.0'
+        '/usr/lib/aarch64-linux-gnu/libbfengine.so.1.1.0'
 
         On Debian systems, the engine is installed into
-        '/usr/lib/aarch64-linux-gnu/libbfengine.so.1.0.0'
+        '/usr/lib/aarch64-linux-gnu/libbfengine.so.1.1.0'
 
     Users are invited to install the shared object file into the
     appropriate destination directory within the OpenSSL engine folder,
@@ -117,27 +117,27 @@ How to install
 
         On Yocto Poky systems running default OpenSSL 1.1.1g:
         # cd <pka_install_dir>/lib
-        # cp libbfengine.so.1.0.0 /usr/lib64/engines-1.1/
+        # cp libbfengine.so.1.1.0 /usr/lib64/engines-1.1/
         # cd /usr/lib64/engines-1.1/
-        # ln -s libbfengine.so.1.0.0 pka.so
+        # ln -s libbfengine.so.1.1.0 pka.so
 
         On CentOS systems running default OpenSSL 1.0.2k-fips:
         # cd <pka_install_dir>/lib
-        # cp libbfengine.so.1.0.0 /usr/lib64/openssl/engines/
+        # cp libbfengine.so.1.1.0 /usr/lib64/openssl/engines/
         # cd /usr/lib64/openssl/engines/
-        # ln -s libbfengine.so.1.0.0 libpka.so
+        # ln -s libbfengine.so.1.1.0 libpka.so
 
         On Ubuntu systems running default OpenSSL 1.1.1f:
         # cd <pka_install_dir>/lib
-        # cp libbfengine.so.1.0.0 /usr/lib/aarch64-linux-gnu/engines-1.1/
+        # cp libbfengine.so.1.1.0 /usr/lib/aarch64-linux-gnu/engines-1.1/
         # cd /usr/lib/aarch64-linux-gnu/engines-1.1/
-        # ln -s libbfengine.so.1.0.0 pka.so
+        # ln -s libbfengine.so.1.1.0 pka.so
 
         On Debian systems running default OpenSSL 1.1.1d:
         # cd <pka_install_dir>/lib
-        # cp libbfengine.so.1.0.0 /usr/lib/aarch64-linux-gnu/engines-1.1/
+        # cp libbfengine.so.1.1.0 /usr/lib/aarch64-linux-gnu/engines-1.1/
         # cd /usr/lib/aarch64-linux-gnu/engines-1.1/
-        # ln -s libbfengine.so.1.0.0 pka.so
+        # ln -s libbfengine.so.1.1.0 pka.so
 
   Note that OpenSSL 1.0 requires the prefix 'lib' to be appended to
   the ID of the PKA engine, i.e. 'libpka.so'. OpenSSL 1.1 the module
