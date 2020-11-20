@@ -120,15 +120,6 @@ static __pka_inline uint64_t pka_get_ticks(void)
     return tick_cnt64;
 }
 
-static __pka_inline uint64_t pka_get_hz_ticks(void)
-{
-    uint64_t freq_64;
-
-    // Read counter
-    asm volatile("mrs %0, cntfrq_el0" : "=r" (freq_64));
-    return freq_64;
-}
-
 #define pm_enable() do {} while(0)
 #define pm_disable() do {} while(0)
 #define pka_get_cycle_cnt() pka_get_ticks()
