@@ -7,4 +7,4 @@ libbfengine_la_CFLAGS = \
 	-fPIC -O3 -g -Wall -Werror \
 	-I$(top_srcdir)/include -I$(top_srcdir)/lib -I$(top_srcdir)/engine/helper
 
-libbfengine_la_LDFLAGS = -lcrypto -version-info 1
+libbfengine_la_LDFLAGS = -lcrypto -version-info 2:0:1

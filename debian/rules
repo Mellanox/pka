@@ -12,5 +12,5 @@ override_dh_auto_install:
 	rmdir debian/libpka1/usr/share/doc/pka/
 	rm debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/*.la
 	mkdir -p debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1
-	cp debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/libbfengine.so.1.0.0 debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1
-	dh_link /usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1/libbfengine.so.1.0.0 /usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1/pka.so
+	cp debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/libbfengine.so.1.1.0 debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1
+	dh_link /usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1/libbfengine.so.1.1.0 /usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1/pka.so
