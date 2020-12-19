@@ -347,6 +347,7 @@ static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
         return -ENOMEM;
     }
 
+    mutex_init(&ring->mutex);
     ring->status  = PKA_DEV_RING_STATUS_INITIALIZED;
 
     return ret;
@@ -1708,7 +1709,7 @@ bool pka_dev_has_avail_ring(pka_ring_info_t *ring_info,
                             uint32_t         rings_num)
 {
     uint32_t errors;
-
+    int      ret;
     errors = 0;
 
     while ((PKA_MAX_NUM_RINGS - errors) >= rings_num)
@@ -1726,11 +1727,21 @@ bool pka_dev_has_avail_ring(pka_ring_info_t *ring_info,
         }
 
         // Open the ring corresponding to the given ring identifier.
-        if (pka_dev_open_ring(ring_info))
+        ret = pka_dev_open_ring(ring_info);
+        if (ret == -EBUSY)
+        {
+            PKA_DEBUG(PKA_DEV, "Ring %d is busy\n", ring_info->ring_id);
+
+            if (next_ring_id == (PKA_MAX_NUM_RINGS - 1))
+                PKA_PRINT(PKA_DEV, "All rings are busy, checking for free rings\n");
+
+            // Ring is busy, check other rings
+            continue;
+        }
+        else if (ret != -EBUSY && ret < 0)
         {
             PKA_DEBUG(PKA_DEV, "failed to open ring %d\n",
                         ring_info->ring_id);
-            pka_dev_close_ring(ring_info);
             errors += 1;
             continue;
         }
@@ -1928,25 +1939,41 @@ int __pka_dev_open_ring(uint32_t ring_id)
         return -EPERM;
 
     ring = pka_dev_get_ring(ring_id);
+
     if (!ring || !ring->shim)
         return -ENXIO;
 
     shim = ring->shim;
 
+    mutex_lock(&ring->mutex);
+
     if (shim->status == PKA_SHIM_STATUS_UNDEFINED ||
           shim->status == PKA_SHIM_STATUS_CREATED ||
           shim->status == PKA_SHIM_STATUS_FINALIZED)
-        return -EPERM;
+    {
+        ret = -EPERM;
+        goto unlock_return;
+    }
+
+    if (ring->status == PKA_DEV_RING_STATUS_BUSY)
+    {
+        ret = -EBUSY;
+        goto unlock_return;
+    }
 
     if (ring->status != PKA_DEV_RING_STATUS_INITIALIZED)
-        return -EPERM;
+    {
+        ret = -EPERM;
+        goto unlock_return;
+    }
 
     // Set ring information words.
     ret = pka_dev_set_ring_info(ring);
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to set ring information\n");
-        return -EWOULDBLOCK;
+        ret = -EWOULDBLOCK;
+        goto unlock_return;
     }
 
     if (shim->busy_ring_num == 0)
@@ -1955,6 +1982,8 @@ int __pka_dev_open_ring(uint32_t ring_id)
     ring->status = PKA_DEV_RING_STATUS_BUSY;
     shim->busy_ring_num += 1;
 
+unlock_return:
+    mutex_unlock(&ring->mutex);
     return ret;
 }
 #endif
@@ -2070,7 +2099,7 @@ int pka_dev_open_ring(pka_ring_info_t *ring_info)
     int fd;
 
     fd = pka_dev_open_ring_file(ring_info);
-    if (fd < 0)
+    if (fd < 0 && fd != -EBUSY)
         fd = pka_dev_open_ring_vfio(ring_info);
 
     return (fd < 0) ? fd : 0;
@@ -2090,14 +2119,20 @@ int __pka_dev_close_ring(uint32_t ring_id)
         return -EPERM;
 
     ring = pka_dev_get_ring(ring_id);
+
     if (!ring || !ring->shim)
         return -ENXIO;
 
     shim = ring->shim;
 
+    mutex_lock(&ring->mutex);
+
     if (shim->status != PKA_SHIM_STATUS_RUNNING &&
             ring->status != PKA_DEV_RING_STATUS_BUSY)
-        return -EPERM;
+    {
+        ret = -EPERM;
+        goto unlock_return;
+    }
 
     ring->status         = PKA_DEV_RING_STATUS_INITIALIZED;
     shim->busy_ring_num -= 1;
@@ -2105,6 +2140,8 @@ int __pka_dev_close_ring(uint32_t ring_id)
     if (shim->busy_ring_num == 0)
         shim->status = PKA_SHIM_STATUS_STOPPED;
 
+unlock_return:
+    mutex_unlock(&ring->mutex);
     return ret;
 }
 #endif

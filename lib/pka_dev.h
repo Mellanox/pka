@@ -131,6 +131,10 @@ typedef struct
     uint32_t                num_cmd_desc;   ///< number of command descriptors.
 
     int8_t                  status;         ///< status of the ring.
+
+#ifdef __KERNEL__
+    struct mutex            mutex;          ///< mutex lock for sharing ring device
+#endif
 } pka_dev_ring_t;
 
 /// defines for pka_dev_ring->status
