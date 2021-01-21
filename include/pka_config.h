@@ -53,13 +53,10 @@
 // and ring spacing.
 #define PKA_RING_WORDS_ADDR         PKA_BUFFER_RAM_BASE
 #define PKA_RING_CNTRS_ADDR         COMMAND_COUNT_0_ADDR
-#define PKA_RING_MEM_0_BASE         PKA_WINDOW_RAM_BASE
-#define PKA_RING_MEM_1_BASE         PKA_WINDOW_RAM_REGION_0_BASE
 
 #define PKA_RING_WORDS_SIZE         0x40        // 64 bytes
 #define PKA_RING_CNTRS_SIZE         0x20        // 32 bytes (3 count registers)
-#define PKA_RING_MEM_0_SIZE         PKA_WINDOW_RAM_REGION_SIZE
-#define PKA_RING_MEM_1_SIZE         PKA_WINDOW_RAM_REGION_SIZE
+#define PKA_RING_MEM_SIZE           0x4000      // 16K bytes
 
 #define PKA_RING_WORDS_SPACING      0x40        // 64  bytes
 #define PKA_RING_CNTRS_SPACING      0x10000     // 64K bytes
@@ -75,11 +72,17 @@
 #define PKA_WINDOW_RAM_RING_MEM_SIZE         0x0800 //  2KB
 #define PKA_WINDOW_RAM_DATA_MEM_SIZE         0x3800 // 14KB
 
+#define PKA_WINDOW_RAM_OFFSET_MASK1       0x730000
+
 // Macro for mapping PKA Ring address into Window RAM address. It converts the
 // ring address, either physical address or virtual address, to valid address
-// into the Window RAM. This is done assuming the Window RAM base and size.
-#define PKA_RING_MEM_ADDR(addr, size) \
-    (PKA_WINDOW_RAM_BASE | (((addr) & 0xffff) | \
+// into the Window RAM. This is done assuming the Window RAM base, size and
+// mask. Here, base is the actual physical address of the Window RAM, with the
+// help of mask it is reduced to Window RAM offset within that PKA block.
+// Further, with the help of addr and size, we arrive at the Window RAM
+// offset address for a PKA Ring within the given Window RAM.
+#define PKA_RING_MEM_ADDR(base, mask, addr, size) \
+    ((base & mask) | (((addr) & 0xffff) | \
         ((((addr) & ~((size) - 1)) & 0xf0000) >> 2)))
 
 // PKA Master Sequencer Control/Status Register
