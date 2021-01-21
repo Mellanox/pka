@@ -183,7 +183,7 @@ static int pka_dev_set_resource_config(pka_dev_shim_t *shim,
         res_ptr->base = res_base;
 
     if (res_type == PKA_DEV_RES_TYPE_MEM)
-        res_ptr->base = shim->base + res_base;
+        res_ptr->base = shim->mem_res.eip154_base + res_base;
 
     res_ptr->size    = res_size;
     res_ptr->type    = res_type;
@@ -275,7 +275,6 @@ static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
     uint32_t ring_cntrs_off;
     uint32_t ring_mem_off;
     uint32_t ring_mem_base;
-    uint32_t ring_mem_size;
 
     uint32_t shim_ring_id;
     uint8_t  window_ram_split;
@@ -302,7 +301,8 @@ static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
     // Configure ring information control/status words resource
     ring_info_words_ptr         = &ring->resources.info_words;
     ring_words_off              = shim_ring_id * PKA_RING_WORDS_SPACING;
-    ring_info_words_ptr->base   = ring_words_off + PKA_RING_WORDS_ADDR;
+    ring_info_words_ptr->base   = ring_words_off + shim->mem_res.eip154_base +
+                                  PKA_RING_WORDS_ADDR;
     ring_info_words_ptr->size   = PKA_RING_WORDS_SIZE;
     ring_info_words_ptr->type   = PKA_DEV_RES_TYPE_MEM;
     ring_info_words_ptr->status = PKA_DEV_RES_STATUS_UNMAPPED;
@@ -311,7 +311,8 @@ static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
     // Configure ring counters registers resource
     ring_counters_ptr           = &ring->resources.counters;
     ring_cntrs_off              = shim_ring_id * PKA_RING_CNTRS_SPACING;
-    ring_counters_ptr->base     = ring_cntrs_off + PKA_RING_CNTRS_ADDR;
+    ring_counters_ptr->base     = ring_cntrs_off + shim->mem_res.eip154_base +
+                                  PKA_RING_CNTRS_ADDR;
     ring_counters_ptr->size     = PKA_RING_CNTRS_SIZE;
     ring_counters_ptr->type     = PKA_DEV_RES_TYPE_REG;
     ring_counters_ptr->status   = PKA_DEV_RES_STATUS_UNMAPPED;
@@ -322,19 +323,17 @@ static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
     if (window_ram_split == PKA_SHIM_WINDOW_RAM_SPLIT_ENABLED)
     {
         ring_mem_off  = shim_ring_id * PKA_RING_MEM_1_SPACING;
-        ring_mem_base = ring_mem_off + PKA_RING_MEM_1_BASE;
-        ring_mem_size = PKA_RING_MEM_1_SIZE;
+        ring_mem_base = ring_mem_off + shim->mem_res.alt_wndw_ram_0_base;
     }
     else
     {
         ring_mem_off  = shim_ring_id * PKA_RING_MEM_0_SPACING;
-        ring_mem_base = ring_mem_off + PKA_RING_MEM_0_BASE;
-        ring_mem_size = PKA_RING_MEM_0_SIZE;
+        ring_mem_base = ring_mem_off + shim->mem_res.wndw_ram_base;
     }
 
     ring_window_ram_ptr         = &ring->resources.window_ram;
     ring_window_ram_ptr->base   = ring_mem_base;
-    ring_window_ram_ptr->size   = ring_mem_size;
+    ring_window_ram_ptr->size   = PKA_RING_MEM_SIZE;
     ring_window_ram_ptr->type   = PKA_DEV_RES_TYPE_MEM;
     ring_window_ram_ptr->status = PKA_DEV_RES_STATUS_UNMAPPED;
     ring_window_ram_ptr->name   = "PKA_RING_WINDOW";
@@ -482,9 +481,11 @@ static int pka_dev_partition_mem(pka_dev_ring_t *ring)
     rslt_desc_ring_base = ring_mem_base + cmd_desc_ring_size;
 
     cmd_desc_ring_base  =
-            PKA_RING_MEM_ADDR(cmd_desc_ring_base, window_ram_size);
+            PKA_RING_MEM_ADDR(window_ram_base, shim->mem_res.wndw_ram_off_mask,
+                              cmd_desc_ring_base, window_ram_size);
     rslt_desc_ring_base =
-            PKA_RING_MEM_ADDR(rslt_desc_ring_base, window_ram_size);
+            PKA_RING_MEM_ADDR(window_ram_base, shim->mem_res.wndw_ram_off_mask,
+                              rslt_desc_ring_base, window_ram_size);
 
     ring_info = ring->ring_info;
     // Fill ring information.
@@ -637,7 +638,7 @@ static int pka_dev_set_ring_info(pka_dev_ring_t *ring)
 // Create shim. Set shim parameters and configure shim resources.
 // It returns 0 on success, a negative error code on failure.
 static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
-                        uint64_t shim_base, uint64_t shim_size, uint8_t split)
+                               uint8_t split, struct pka_dev_mem_res *mem_res)
 {
     int ret = 0;
 
@@ -659,9 +660,8 @@ static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
         return -EINVAL;
     }
 
-    shim->shim_id    = shim_id;
-    shim->base       = shim_base;
-    shim->size       = shim_size;
+    shim->shim_id = shim_id;
+    shim->mem_res = *mem_res;
 
     if (split)
         shim->window_ram_split = PKA_SHIM_WINDOW_RAM_SPLIT_ENABLED;
@@ -682,10 +682,10 @@ static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
 
     // Set PKA device Buffer RAM config
     ret = pka_dev_set_resource_config(shim, &shim->resources.buffer_ram,
-                                        PKA_BUFFER_RAM_BASE,
-                                        PKA_BUFFER_RAM_SIZE,
-                                        PKA_DEV_RES_TYPE_MEM,
-                                        "PKA_BUFFER_RAM");
+                                      PKA_BUFFER_RAM_BASE,
+                                      PKA_BUFFER_RAM_SIZE,
+                                      PKA_DEV_RES_TYPE_MEM,
+                                      "PKA_BUFFER_RAM");
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "unable to set Buffer RAM config\n");
@@ -694,10 +694,10 @@ static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
 
     // Set PKA device Master Program RAM config
     ret = pka_dev_set_resource_config(shim, &shim->resources.master_prog_ram,
-                                        PKA_MASTER_PROG_RAM_BASE,
-                                        PKA_MASTER_PROG_RAM_SIZE,
-                                        PKA_DEV_RES_TYPE_MEM,
-                                        "PKA_MASTER_PROG_RAM");
+                                      PKA_MASTER_PROG_RAM_BASE,
+                                      PKA_MASTER_PROG_RAM_SIZE,
+                                      PKA_DEV_RES_TYPE_MEM,
+                                      "PKA_MASTER_PROG_RAM");
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "unable to set Master Program RAM config\n");
@@ -706,12 +706,12 @@ static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
 
     // Set PKA device Master Controller register
     reg_size = PAGE_SIZE;
-    reg_base = pka_dev_get_register_base(shim->base,
-                                            PKA_MASTER_SEQ_CTRL_ADDR);
+    reg_base = pka_dev_get_register_base(shim->mem_res.eip154_base,
+                                         PKA_MASTER_SEQ_CTRL_ADDR);
     ret = pka_dev_set_resource_config(shim, &shim->resources.master_seq_ctrl,
-                                        reg_base, reg_size,
-                                        PKA_DEV_RES_TYPE_REG,
-                                        "PKA_MASTER_SEQ_CTRL");
+                                      reg_base, reg_size,
+                                      PKA_DEV_RES_TYPE_REG,
+                                      "PKA_MASTER_SEQ_CTRL");
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "unable to set Master Controller register "
@@ -721,8 +721,8 @@ static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
 
     // Set PKA device AIC registers
     reg_size = PAGE_SIZE;
-    reg_base = pka_dev_get_register_base(shim->base,
-                                            AIC_POL_CTRL_ADDR);
+    reg_base = pka_dev_get_register_base(shim->mem_res.eip154_base,
+                                         AIC_POL_CTRL_ADDR);
     ret = pka_dev_set_resource_config(shim, &shim->resources.aic_csr,
                                       reg_base, reg_size,
                                       PKA_DEV_RES_TYPE_REG,
@@ -735,8 +735,8 @@ static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
 
     // Set PKA device TRNG registers
     reg_size = PAGE_SIZE;
-    reg_base = pka_dev_get_register_base(shim->base,
-                                            TRNG_OUTPUT_0_ADDR);
+    reg_base = pka_dev_get_register_base(shim->mem_res.eip154_base,
+                                         TRNG_OUTPUT_0_ADDR);
     ret = pka_dev_set_resource_config(shim, &shim->resources.trng_csr,
                                       reg_base, reg_size,
                                       PKA_DEV_RES_TYPE_REG,
@@ -749,8 +749,8 @@ static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
 
     // Set PKA device 'glue' logic registers
     reg_size = PAGE_SIZE;
-    reg_base = pka_dev_get_register_base(shim->base,
-                                            PKA_INT_MASK_ADDR);
+    reg_base = pka_dev_get_register_base(shim->mem_res.csr_base,
+                                         PKA_INT_MASK_ADDR);
     ret = pka_dev_set_resource_config(shim, &shim->resources.ext_csr,
                                       reg_base, reg_size,
                                       PKA_DEV_RES_TYPE_REG,
@@ -1441,16 +1441,15 @@ int pka_dev_unregister_ring(pka_dev_ring_t *ring)
 }
 
 static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
-                                               uint64_t shim_base,
-                                               uint64_t shim_size)
+                                               struct pka_dev_mem_res *mem_res)
 {
     pka_dev_shim_t *shim;
 
     uint8_t  split;
     int      ret = 0;
 
-    PKA_DEBUG(PKA_DEV, "register shim id=%u, start=0x%llx end=0x%llx\n",
-               shim_id, shim_base, shim_base + shim_size);
+    PKA_DEBUG(PKA_DEV, "register shim id=%u, eip154_start=0x%llx eip154_end=0x%llx\n",
+        shim_id, mem_res->eip154_base, mem_res->eip154_base + mem_res->eip154_size);
 
     shim = kzalloc(sizeof(pka_dev_shim_t), GFP_KERNEL);
     if (!shim)
@@ -1464,7 +1463,8 @@ static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
     split = PKA_SPLIT_WINDOW_RAM_MODE;
 
     // Create PKA shim
-    ret = pka_dev_create_shim(shim, shim_id, shim_base, shim_size, split);
+    ret = pka_dev_create_shim(shim, shim_id, split, mem_res);
+
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to create shim %u\n", shim_id);
@@ -1487,14 +1487,15 @@ static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
     return shim;
 }
 
-pka_dev_shim_t *pka_dev_register_shim(uint32_t shim_id, uint64_t shim_base,
-                           uint64_t shim_size, uint8_t shim_fw_id)
+pka_dev_shim_t *pka_dev_register_shim(uint32_t shim_id, uint8_t shim_fw_id,
+                                      struct pka_dev_mem_res *mem_res)
 {
     pka_dev_shim_t *shim;
 
     pka_firmware_set_id(shim_fw_id);
 
-    shim = __pka_dev_register_shim(shim_id, shim_base, shim_size);
+    shim = __pka_dev_register_shim(shim_id, mem_res);
+
     if (shim)
     {
         pka_gbl_config.dev_shims[shim->shim_id]  = shim;
