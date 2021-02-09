@@ -1836,6 +1836,8 @@ static void ParseArgs(int argc, char *argv[], app_args_t *app_args)
 
 static void PrintInfo(char *progname, app_args_t *app_args)
 {
+    int8_t   mask_idx;
+    uint8_t *mask;
     printf("\n"
            "PKA system info\n"
            "---------------\n"
@@ -1851,11 +1853,15 @@ static void PrintInfo(char *progname, app_args_t *app_args)
 
     printf("Running PKA inst: %s\n"
            "-----------------\n"
-           "Avail rings:      %d\n"
-           "HW rings in use:  %x\n",
+           "Avail rings:      %d\n",
            progname,
-           pka_get_rings_count(app_args->instance),
-           pka_get_rings_bitmask(app_args->instance));
+           pka_get_rings_count(app_args->instance));
+
+    mask = pka_get_rings_bitmask(app_args->instance);
+    printf("HW rings in use      :  ");
+    for (mask_idx = PKA_RING_NUM_BITMASK - 1; mask_idx >= 0; mask_idx--)
+        printf("%x", mask[mask_idx]);
+    printf("\n\n");
     printf("Mode:            ");
     switch (app_args->mode)
     {

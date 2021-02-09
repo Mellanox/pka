@@ -75,7 +75,7 @@ typedef struct
                                                   ///  thread workers.
 
     uint32_t         rings_byte_order;   ///< byte order whether BE or LE.
-    uint32_t         rings_mask;         ///< bitmask of allocated HW rings.
+    uint8_t          rings_mask[PKA_RING_NUM_BITMASK]; ///< bitmask of allocated HW rings.
     uint32_t         rings_cnt;          ///< number of allocated Rings.
     pka_ring_info_t  rings[PKA_MAX_NUM_RINGS];    ///< table of allocated rings
                                                   ///  to process PK commands.
