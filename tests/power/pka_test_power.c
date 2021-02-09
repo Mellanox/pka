@@ -928,19 +928,24 @@ static void ParseArgs(int argc, char *argv[], app_args_t *app_args)
 
 static void PrintInfo(char *progname, app_args_t *app_args)
 {
+    int8_t   mask_idx;
+    uint8_t *mask;
+
     printf("Running PKA test: %s\n"
            "--------------------------\n"
            "Avail rings          :  %d\n"
-           "HW rings in use      :  %x\n"
            "Nb of objs per queue :  %d\n"
            "RSA key size in bits :  %d\n"
            "Expected duration    :  %ds\n",
            progname,
            pka_get_rings_count(pka_instance),
-           pka_get_rings_bitmask(pka_instance),
            app_args->queue_size,
            app_args->key_size * 1024,
            app_args->duration);
+    mask = pka_get_rings_bitmask(pka_instance);
+    printf("HW rings in use      :  ");
+    for (mask_idx = PKA_RING_NUM_BITMASK - 1; mask_idx >= 0; mask_idx--)
+        printf("%x", mask[mask_idx]);
     printf("\n\n");
     fflush(NULL);
 }

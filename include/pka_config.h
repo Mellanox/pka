@@ -37,12 +37,16 @@
 #include "pka_addrs.h"
 
 // The maximum number of PKA shims refered to as IO blocks.
-#define PKA_MAX_NUM_IO_BLOCKS           8
+#define PKA_MAX_NUM_IO_BLOCKS           24
 // The maximum number of Rings supported by IO block (shim).
 #define PKA_MAX_NUM_IO_BLOCK_RINGS      4
 
 #define PKA_MAX_NUM_RINGS \
     (PKA_MAX_NUM_IO_BLOCK_RINGS * PKA_MAX_NUM_IO_BLOCKS)
+
+// Bitmask to represent rings, grouped into 8 bit (uint8_t) blocks.
+#define PKA_RING_NUM_BITMASK \
+    ((PKA_MAX_NUM_RINGS / 8) + 1)
 
 // Resources are regions which include info control/status words,
 // count registers and host window ram.
@@ -72,7 +76,11 @@
 #define PKA_WINDOW_RAM_RING_MEM_SIZE         0x0800 //  2KB
 #define PKA_WINDOW_RAM_DATA_MEM_SIZE         0x3800 // 14KB
 
+// Window RAM/Alternate Window RAM  offset mask for BF1 and BF2
 #define PKA_WINDOW_RAM_OFFSET_MASK1       0x730000
+
+// Window RAM/Alternate Window RAM offset mask for BF3
+#define PKA_WINDOW_RAM_OFFSET_MASK2       0x70000
 
 // Macro for mapping PKA Ring address into Window RAM address. It converts the
 // ring address, either physical address or virtual address, to valid address
