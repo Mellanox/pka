@@ -52,19 +52,6 @@
 #define PKA_DEFAULT_SIZE         (16 * MEGABYTE) // 16 MB
 
 #define PKA_MAX_QUEUES_NUM        16
-#define PKA_SHMEM_SIZE_MASK       0x0FFFFFFFUL
-#define PKA_SHMEM_NAME_SIZE       32
-#define PKA_SHMEM_PREFIX          "PKA_"
-
-// Shared memory object information
-typedef struct
-{
-    int         fd;         ///< shared memory file descriptor.
-    const char *name;       ///< shared memory mmap name.
-    size_t      size;       ///< shared memory mmap size.
-    uintptr_t   addr;       ///< shared memory address.
-    uint8_t    *ptr;        ///< shared memory pointer.
-} pka_shmem_info_t;
 
 typedef struct
 {
@@ -92,8 +79,6 @@ typedef struct
     uint32_t         rings_cnt;          ///< number of allocated Rings.
     pka_ring_info_t  rings[PKA_MAX_NUM_RINGS];    ///< table of allocated rings
                                                   ///  to process PK commands.
-
-    pka_shmem_info_t shmem_info;         ///< shared memory information.
 
     /// Lock-free implementations have higher performance and scale better
     /// than implementations using locks. User can decide whether to use
