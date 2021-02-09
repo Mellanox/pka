@@ -159,57 +159,6 @@ uint8_t pka_get_rings_byte_order(pka_handle_t handle)
     return rings_byte_order;
 }
 
-// Open shared memory object.
-static int pka_open_shmem(char *shmem_name)
-{
-    uint32_t perms;
-    int      shmem_fd;
-    int      ret;
-
-    perms = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
-    shmem_fd = shm_open(shmem_name, O_RDWR | O_CREAT | O_EXCL, perms);
-    if (shmem_fd < 0)
-    {
-        PKA_DEBUG(PKA_USER, "shared memory object already exists\n");
-
-        if (errno == EEXIST)
-        {
-            // Unlink shared memory
-            ret = shm_unlink(shmem_name);
-            if (ret < 0)
-            {
-                PKA_DEBUG(PKA_USER, "Shared memory couldn't be removed\n");
-                return -errno;
-            }
-            // Create again shared memory
-            shmem_fd = shm_open(shmem_name, O_RDWR | O_CREAT | O_EXCL, perms);
-        }
-
-        if (shmem_fd < 0)
-            return -errno;
-    }
-
-    return shmem_fd;
-}
-
-// Mmap shared memory object.
-static uint8_t *pka_mmap_shmem(int shmem_fd, size_t size)
-{
-    uint32_t mprotect;
-    uint8_t *shmem_ptr;
-
-    if (ftruncate(shmem_fd, size) != 0)
-        return NULL;
-    mprotect  = PROT_READ | PROT_WRITE;
-    shmem_ptr = mmap(NULL, size, mprotect, MAP_SHARED, shmem_fd, 0);
-    if (shmem_ptr == MAP_FAILED)
-        return NULL;
-
-    memset(shmem_ptr, 0, size);
-
-    return shmem_ptr;
-}
-
 // Determine the size of memory shared object.
 static uint32_t pka_get_memsize(uint8_t cnt, uint32_t cmd_queue_size,
                                     uint32_t result_queue_size)
@@ -280,11 +229,7 @@ pka_instance_t pka_init_global(const char *name,
                                uint32_t    cmd_queue_size,
                                uint32_t    result_queue_size)
 {
-    uintptr_t shmem_addr;
-    uint32_t  shmem_size;
-    uint8_t  *shmem_ptr;
-    char     *shmem_name;
-    int       shmem_fd;
+    uint32_t  mem_size;
     int       ret;
 
     if ((!flags) || (cmd_queue_size > PKA_QUEUE_MASK_SIZE)  ||
@@ -297,21 +242,7 @@ pka_instance_t pka_init_global(const char *name,
         goto exit_error;
     }
 
-    shmem_name = malloc(PKA_SHMEM_NAME_SIZE);
-    if (!shmem_name)
-    {
-        PKA_DEBUG(PKA_USER, "memory allocation failed for shared memory\n");
-        goto exit_error;
-    }
-
-    ret = snprintf(shmem_name, PKA_SHMEM_NAME_SIZE, "/%s%s",
-                        PKA_SHMEM_PREFIX, name);
-    if (ret < 0 || ret >= PKA_SHMEM_NAME_SIZE)
-    {
-        PKA_DEBUG(PKA_USER, "name size too long\n");
-        errno = ENAMETOOLONG;
-        goto exit_error;
-    }
+    PKA_DEBUG(PKA_USER, "Instance name: %s\n", name);
 
     // Determine the size of the pair of queues.
     if (!pka_is_power_of_2(cmd_queue_size))
@@ -323,37 +254,15 @@ pka_instance_t pka_init_global(const char *name,
     cmd_queue_size    = pka_queue_get_memsize(cmd_queue_size);
     result_queue_size = pka_queue_get_memsize(result_queue_size);
     // Determine the memory required for PK context.
-    shmem_size = pka_get_memsize(queue_cnt, cmd_queue_size,
-                                    result_queue_size);
+    mem_size = pka_get_memsize(queue_cnt, cmd_queue_size,
+                               result_queue_size);
 
-    // Open shared memory object
-    shmem_fd = pka_open_shmem(shmem_name);
-    if (shmem_fd < 0)
+    pka_gbl_info = (pka_global_info_t *) calloc(1, mem_size);
+    if (pka_gbl_info == NULL)
     {
-        PKA_DEBUG(PKA_USER, "failed to open shared memory object\n");
-        errno = EBADF;
+        errno = ENOMEM;
         goto exit_error;
     }
-
-    // Mmap shared memory object
-    shmem_ptr = pka_mmap_shmem(shmem_fd, shmem_size);
-    if (!shmem_ptr)
-    {
-        PKA_DEBUG(PKA_USER, "failed to mmap shared memory\n");
-        errno = EFAULT;
-        goto exit_shmem_close;
-    }
-
-    // Allocate PKA context
-    shmem_addr   = (uintptr_t) shmem_ptr;
-    pka_gbl_info = (pka_global_info_t *) shmem_addr;
-
-    // Fill shared memory info
-    pka_gbl_info->shmem_info.fd   = shmem_fd;
-    pka_gbl_info->shmem_info.size = shmem_size;
-    pka_gbl_info->shmem_info.name = shmem_name;
-    pka_gbl_info->shmem_info.ptr  = shmem_ptr;
-    pka_gbl_info->shmem_info.addr = shmem_addr;
 
     // Verify if rings are available to process PKA commands.
     pka_gbl_info->rings_byte_order =
@@ -366,7 +275,7 @@ pka_instance_t pka_init_global(const char *name,
     {
         PKA_DEBUG(PKA_USER, "failed to retrieve free rings\n");
         errno = EBUSY;
-        goto exit_shmem_munmap;
+        goto exit_mem_free;
     }
 
     // Initialize PK context info
@@ -389,18 +298,10 @@ pka_instance_t pka_init_global(const char *name,
     PKA_DEBUG(PKA_USER, "PKA instance %s created successfully\n", name);
     return (pka_instance_t) pka_gbl_info->main_pid;
 
-exit_shmem_munmap:
+exit_mem_free:
     PKA_DEBUG(PKA_USER, "munmap PKA shared memory object\n");
-    munmap(pka_gbl_info->shmem_info.ptr,
-           pka_gbl_info->shmem_info.size);
-exit_shmem_close:
-    PKA_DEBUG(PKA_USER, "close PKA shared memory object\n");
-    close(shmem_fd);
-    PKA_DEBUG(PKA_USER, "unlink PKA shared memory object\n");
-    ret = shm_unlink(shmem_name);
-    if (ret < 0)
-        PKA_DEBUG(PKA_USER, "Shared memory couldn't be removed\n");
-    free(shmem_name);
+    free(pka_gbl_info);
+    pka_gbl_info = NULL;
 exit_error:
     return PKA_INSTANCE_INVALID;
 }
@@ -408,10 +309,6 @@ exit_error:
 // Global PKA termination.
 void pka_term_global(pka_instance_t instance)
 {
-    char name[PKA_SHMEM_NAME_SIZE];
-    int  fd;
-    int  ret;
-
     if (instance == (pka_instance_t) pka_gbl_info->main_pid)
     {
         if (pka_atomic32_load(&pka_gbl_info->workers_cnt))
@@ -422,19 +319,7 @@ void pka_term_global(pka_instance_t instance)
         pka_ring_free(pka_gbl_info->rings, &pka_gbl_info->rings_mask,
                         &pka_gbl_info->rings_cnt);
 
-        fd = pka_gbl_info->shmem_info.fd;
-        snprintf(name, sizeof(name), "%s", pka_gbl_info->shmem_info.name);
-        free((char *)pka_gbl_info->shmem_info.name);
-
-        PKA_DEBUG(PKA_USER, "munmap PKA shared memory object\n");
-        munmap(pka_gbl_info->shmem_info.ptr, pka_gbl_info->shmem_info.size);
-        PKA_DEBUG(PKA_USER, "close PKA shared memory object\n");
-        close(fd);
-        PKA_DEBUG(PKA_USER, "unlink PKA shared memory object\n");
-        ret = shm_unlink(name);
-        if (ret < 0 )
-            PKA_DEBUG(PKA_USER, "Shared memory couldn't be removed\n");
-
+        free(pka_gbl_info);
         pka_gbl_info = NULL;
     }
 }
