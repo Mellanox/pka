@@ -105,6 +105,7 @@
 #define TRNG_FRODETUNE_ADDR     0x12048
 #define TRNG_ALARMMASK_ADDR     0x12050
 #define TRNG_ALARMSTOP_ADDR     0x12058
+#define TRNG_TEST_ADDR          0x120E0
 #define TRNG_BLOCKCNT_ADDR      0x120E8
 #define TRNG_OPTIONS_ADDR       0x120F0
 #define TRNG_TEST_ADDR          0x120E0
@@ -116,6 +117,19 @@
 #define TRNG_POKER_7_4          0x120C8
 #define TRNG_POKER_B_8          0x120D0
 #define TRNG_POKER_F_C          0x120D8
+
+#define TRNG_PS_AI_0_ADDR       0x12080
+#define TRNG_PS_AI_1_ADDR       0x12088
+#define TRNG_PS_AI_2_ADDR       0x12090
+#define TRNG_PS_AI_3_ADDR       0x12098
+#define TRNG_PS_AI_4_ADDR       0x120A0
+#define TRNG_PS_AI_5_ADDR       0x120A8
+#define TRNG_PS_AI_6_ADDR       0x120B0
+#define TRNG_PS_AI_7_ADDR       0x120B8
+#define TRNG_PS_AI_8_ADDR       0x120C0
+#define TRNG_PS_AI_9_ADDR       0x120C8
+#define TRNG_PS_AI_10_ADDR      0x120D0
+#define TRNG_PS_AI_11_ADDR      0x120D8
 
 // Control register address/offset. This is accessed from the ARM using 8
 // byte reads/writes however only the bottom 32 bits are implemented.

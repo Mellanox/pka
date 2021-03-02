@@ -182,6 +182,31 @@
 // TRNG Control bit
 #define PKA_TRNG_CONTROL_TEST_MODE          0x100
 
+// TRNG Control Register Value; Set bit 10 and 12 to start the EIP-76 a.k.a TRNG
+// engine with DRBG enabled, gathering entropy from the FROs.
+#define PKA_TRNG_CONTROL_DRBG_REG_VAL       0x00001400
+
+// DRBG enabled TRNG 'request_data' value. REQ_DATA_VAL (in accordance with
+// DATA_BLOCK_MASK) requests 256 blocks of 128-bit random output.
+// 4095 blocks is the max number that can be requested for the TRNG(with DRBG)
+// configuration on Bluefield platforms.
+#define PKA_TRNG_CONTROL_REQ_DATA_VAL       0x10010000
+
+// Mask for 'Data Block' in TRNG Control Register.
+#define PKA_TRNG_DRBG_DATA_BLOCK_MASK       0xfff00000
+
+// Set bit 12 of TRNG Control Register to enable DRBG functionality.
+#define PKA_TRNG_CONTROL_DRBG_ENABLE_VAL    0x00001000
+
+// Set bit 8 a.ka 'test_sp_800_90 DRBG' bit in the TRNG Test Register.
+#define PKA_TRNG_TEST_DRBG_VAL              0x00000080
+
+// Number of Personalization String/Additional Input Registers
+#define PKA_TRNG_PS_AI_REG_COUNT            12
+
+// DRBG Reseed enable
+#define PKA_TRNG_CONTROL_DRBG_RESEED        0x00008000
+
 // TRNG Status bits
 #define PKA_TRNG_STATUS_READY               0x1
 #define PKA_TRNG_STATUS_SHUTDOWN_OFLO       0x2

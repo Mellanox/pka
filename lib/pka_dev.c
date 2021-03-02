@@ -51,6 +51,45 @@
 #include "pka_dev.h"
 
 #ifdef __KERNEL__
+
+// Personalization string "NVIDIA-MELLANOX-BLUEFIELD-TRUE_RANDOM_NUMBER_GEN"
+uint32_t pka_trng_drbg_ps_str[] =
+{
+    0x4e564944, 0x49412d4d, 0x454c4c41, 0x4e4f582d,
+    0x424c5545, 0x4649454c, 0x442d5452, 0x55455f52,
+    0x414e444f, 0x4d5f4e55, 0x4d424552, 0x5f47454e
+};
+
+// Personalization string for DRBG test
+uint32_t pka_trng_drbg_test_ps_str[] =
+{
+    0x64299d83, 0xc34d7098, 0x5bd1f51d, 0xddccfdc1,
+    0xdd0455b7, 0x166279e5, 0x0974cb1b, 0x2f2cd100,
+    0x59a5060a, 0xca79940d, 0xd4e29a40, 0x56b7b779
+};
+
+// First Entropy string for DRBG test
+uint32_t pka_trng_drbg_test_etpy_str1[] =
+{
+    0xaa6bbcab, 0xef45e339, 0x136ca1e7, 0xbce1c881,
+    0x9fa37b09, 0x63b53667, 0xb36e0053, 0xa202ed81,
+    0x4650d90d, 0x8eed6127, 0x666f2402, 0x0dfd3af9
+};
+
+// Second Entropy string for DRBG test
+uint32_t pka_trng_drbg_test_etpy_str2[] =
+{
+    0x35c1b7a1, 0x0154c52b, 0xd5777390, 0x226a4fdb,
+    0x5f16080d, 0x06b68369, 0xd0c93d00, 0x3336e27f,
+    0x1abf2c37, 0xe6ab006c, 0xa4adc6e1, 0x8e1907a2
+};
+
+// Known answer for DRBG test
+uint32_t pka_trng_drbg_test_output[] =
+{
+    0xb663b9f1, 0x24943e13, 0x80f7dce5, 0xaba1a16f
+};
+
 pka_dev_gbl_config_t pka_gbl_config;
 
 // Global PKA shim resource info table
@@ -1108,6 +1147,29 @@ static int pka_dev_config_trng_clk(pka_dev_res_t *aic_csr_ptr)
     return ret;
 }
 
+static int pka_dev_trng_wait_test_ready(void *csr_reg_ptr, uint64_t csr_reg_base)
+{
+    uint64_t csr_reg_off, timer, test_ready, csr_reg_val;
+
+    test_ready  = 0;
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_STATUS_ADDR);
+    timer       = pka_dev_timer_start(1000000); // 1000 ms
+
+    while (!test_ready)
+    {
+        csr_reg_val = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+        test_ready  = csr_reg_val & PKA_TRNG_STATUS_TEST_READY;
+
+        if (pka_dev_timer_done(timer))
+        {
+            PKA_DEBUG(PKA_DEV, "TRNG: TEST ready timer done, 0x%llx\n", csr_reg_val);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
 static int pka_dev_trng_enable_test(void *csr_reg_ptr, uint64_t csr_reg_base,
                                     uint32_t test)
 {
@@ -1442,10 +1504,106 @@ exit:
     return ret;
 }
 
+static void pka_dev_trng_write_ps_ai_str(void *csr_reg_ptr,
+                                         uint64_t csr_reg_base,
+                                         uint32_t input_str[])
+{
+    uint64_t csr_reg_off;
+    int i;
 
-// Configure the TRNG.
-static int pka_dev_config_trng(pka_dev_res_t *aic_csr_ptr,
-                               pka_dev_res_t *trng_csr_ptr)
+    for (i = 0; i < PKA_TRNG_PS_AI_REG_COUNT; i++)
+    {
+        csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                          TRNG_PS_AI_0_ADDR + (i * 0x8));
+
+        pka_dev_io_write(csr_reg_ptr, csr_reg_off, input_str[i]);
+    }
+}
+
+static void pka_dev_trng_drbg_generate(void *csr_reg_ptr, uint64_t csr_reg_base)
+{
+    uint64_t csr_reg_off;
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_CONTROL_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_CONTROL_REQ_DATA_VAL);
+}
+
+static int pka_dev_test_trng_drbg(void *csr_reg_ptr, uint64_t csr_reg_base)
+{
+    uint64_t csr_reg_off, csr_reg_val;
+    int i, ret;
+
+    ret = 0;
+
+    // Make sure the engine is idle.
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_CONTROL_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, 0);
+
+    // Enable DRBG, TRNG need not be enabled for this test.
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_CONTROL_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_CONTROL_DRBG_ENABLE_VAL);
+
+    // Set 'test_sp_800_90' bit in the TRNG_TEST register
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_TEST_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_TEST_DRBG_VAL);
+
+    // Wait for 'test_ready' bit to be set.
+    ret = pka_dev_trng_wait_test_ready(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        goto exit;
+
+    // Instantiate
+    pka_dev_trng_write_ps_ai_str(csr_reg_ptr, csr_reg_base, pka_trng_drbg_test_ps_str);
+    ret = pka_dev_trng_wait_test_ready(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        goto exit;
+
+    // Generate
+    pka_dev_trng_write_ps_ai_str(csr_reg_ptr, csr_reg_base, pka_trng_drbg_test_etpy_str1);
+    ret = pka_dev_trng_wait_test_ready(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        goto exit;
+
+    // A standard NIST SP 800-90A DRBG known-answer test discards
+    // the result of the first 'Generate' function and only checks
+    // the result of the second 'Generate' function. Hence 'Generate'
+    // is performed again.
+
+    // Generate
+    pka_dev_trng_write_ps_ai_str(csr_reg_ptr, csr_reg_base, pka_trng_drbg_test_etpy_str2);
+    ret = pka_dev_trng_wait_test_ready(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        goto exit;
+
+    // Check output registers
+    for (i = 0; i < PKA_TRNG_OUTPUT_CNT; i++)
+    {
+        csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                          TRNG_OUTPUT_0_ADDR + (i * 0x8));
+
+        csr_reg_val = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+
+        if ((uint32_t)csr_reg_val != pka_trng_drbg_test_output[i])
+        {
+            PKA_DEBUG(PKA_DEV,
+                "DRBG known answer test failed for output register:%d, 0x%x\n",
+                i, (uint32_t)csr_reg_val);
+            ret = 1;
+            goto exit;
+        }
+    }
+
+    // Clear 'test_sp_800_90' bit in the TRNG_TEST register.
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_TEST_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, 0);
+
+exit:
+    return ret;
+}
+
+// Configure TRNG with DRBG
+static int pka_dev_config_trng_drbg(pka_dev_res_t *aic_csr_ptr,
+                                    pka_dev_res_t *trng_csr_ptr)
 {
     int ret = 0;
 
@@ -1465,10 +1623,13 @@ static int pka_dev_config_trng(pka_dev_res_t *aic_csr_ptr,
     csr_reg_base = trng_csr_ptr->base;
     csr_reg_ptr  = trng_csr_ptr->ioaddr;
 
-    // Starting up the TRNG without a DRBG (default configuration);
-    // When not using the AES-256 DRBG, the startup sequence is relatively
-    // straightforward and the engine will generate data automatically to
-    // keep the output register and buffer RAM filled.
+    // Perform NIST known-answer tests on the complete SP 800-90A DRBG
+    // without BC_DF functionality.
+    ret = pka_dev_test_trng_drbg(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        return ret;
+
+    // Starting up the TRNG with a DRBG
 
     // Make sure the engine is idle.
     csr_reg_off =
@@ -1505,23 +1666,40 @@ static int pka_dev_config_trng(pka_dev_res_t *aic_csr_ptr,
             pka_dev_get_register_offset(csr_reg_base, TRNG_FROENABLE_ADDR);
     pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_FROENABLE_REG_VAL);
 
+    // Optionally, write 'Personalization string' of upto 384 bits in
+    // TRNG_PS_AI_... registers. The contents of these registers will be
+    // XOR-ed into the output of the SHA-256 'Conditioning Function' to be
+    // used as seed value for the actual DRBG.
+    pka_dev_trng_write_ps_ai_str(csr_reg_ptr, csr_reg_base, pka_trng_drbg_ps_str);
+
     // Run TRNG tests after configuring TRNG.
     // NOTE: TRNG need not be enabled to carry out these tests.
     if (!ret)
         ret = pka_dev_test_trng(csr_reg_ptr, csr_reg_base);
 
-    // Start the actual engine by setting the 'enable_trng' bit in the
-    // TRNG_CONTROL register (also a nice point to set the interrupt mask
+    // Start the actual engine by setting the 'enable_trng' and 'drbg_en' bit
+    // in the TRNG_CONTROL register (also a nice point to set the interrupt mask
     // bits).
     csr_reg_off =
             pka_dev_get_register_offset(csr_reg_base, TRNG_CONTROL_ADDR);
-    pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_CONTROL_REG_VAL);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_CONTROL_DRBG_REG_VAL);
+
+    // The engine is now ready to handle the first 'Generate' request using
+    // the 'request_data' bit of the TRNG_CONTROL register. The first output
+    // for these requests will take a while, as Noise Source and Conditioning
+    // Function must first generate seed entropy for the DRBG.
 
     // Optionally, when buffer RAM is configured: Set a data available
     // interrupt threshold using the 'load_thresh' and 'blocks_thresh'
     // fields of the TRNG_INTACK register. This allows delaying the data
     // available interrupt until the indicated number of 128-bit words are
     // available in the buffer RAM.
+
+
+    // Start the actual 'Generate' operation using the 'request_data' and 'data_blocks'
+    // fields of the TRNG_CONTROL register.
+
+    pka_dev_trng_drbg_generate(csr_reg_ptr, csr_reg_base);
 
     mdelay(200);
 
@@ -1647,8 +1825,8 @@ static int pka_dev_init_shim(pka_dev_shim_t *shim)
     shim->trng_err_cycle = 0;
 
     // Configure the TRNG
-    ret = pka_dev_config_trng(&shim->resources.aic_csr,
-                              &shim->resources.trng_csr);
+    ret = pka_dev_config_trng_drbg(&shim->resources.aic_csr,
+                                   &shim->resources.trng_csr);
 
     // Pull out data from the content of the TRNG buffer RAM and
     // start the re-generation of new numbers; read and drop 512
@@ -1961,6 +2139,27 @@ static bool pka_dev_trng_shutdown_oflo(pka_dev_res_t *trng_csr_ptr,
     return true;
 }
 
+static int pka_dev_trng_drbg_reseed(void *csr_reg_ptr, uint64_t csr_reg_base)
+{
+    uint64_t csr_reg_off;
+    int ret;
+
+    ret = 0;
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_CONTROL_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_CONTROL_DRBG_RESEED);
+
+    ret = pka_dev_trng_wait_test_ready(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        return ret;
+
+    // Write personalization string
+    pka_dev_trng_write_ps_ai_str(csr_reg_ptr, csr_reg_base, pka_trng_drbg_ps_str);
+
+    return ret;
+}
+
+// Read from DRBG enabled TRNG
 int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
 {
     int ret = 0;
@@ -1972,7 +2171,7 @@ int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
     uint8_t        output_idx, trng_ready = 0;
     void          *csr_reg_ptr;
 
-    if (!shim || ! data || (cnt % PKA_TRNG_OUTPUT_CNT != 0))
+    if (!shim || !data || (cnt % PKA_TRNG_OUTPUT_CNT != 0))
         return -EINVAL;
 
     if (!cnt)
@@ -1985,8 +2184,8 @@ int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
     if (trng_csr_ptr->status != PKA_DEV_RES_STATUS_MAPPED ||
             trng_csr_ptr->type != PKA_DEV_RES_TYPE_REG)
     {
-        mutex_unlock(&shim->mutex);
-        return -EPERM;
+        ret = -EPERM;
+        goto exit;
     }
 
     csr_reg_base = trng_csr_ptr->base;
@@ -1995,8 +2194,8 @@ int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
     if (!pka_dev_trng_shutdown_oflo(trng_csr_ptr,
                                     &shim->trng_err_cycle))
     {
-        mutex_unlock(&shim->mutex);
-        return -EWOULDBLOCK;
+        ret = -EWOULDBLOCK;
+        goto exit;
     }
 
     // Determine the number of 32-bit words.
@@ -2005,12 +2204,36 @@ int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
     for (data_idx = 0; data_idx < word_cnt; data_idx++)
     {
         output_idx = data_idx % PKA_TRNG_OUTPUT_CNT;
+
         // Tell the hardware to advance
         if (output_idx == 0)
         {
             csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
                                                         TRNG_INTACK_ADDR);
             pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_STATUS_READY);
+            trng_ready = 0;
+
+            // Check if 'data_blocks' field is zero in TRNG_CONTROL register,
+            // if it is then we have to issue a 'Reseed' and Generate' request
+            // for DRBG enabled TRNG.
+            csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                                                      TRNG_CONTROL_ADDR);
+            csr_reg_value = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+
+            if (!((uint32_t)csr_reg_value & PKA_TRNG_DRBG_DATA_BLOCK_MASK))
+            {
+                // Issue reseed
+                ret = pka_dev_trng_drbg_reseed(csr_reg_ptr, csr_reg_base);
+                if (ret)
+                {
+                    ret = -EBUSY;
+                    goto exit;
+                }
+
+                // Issue generate request
+                pka_dev_trng_drbg_generate(csr_reg_ptr, csr_reg_base);
+            }
+
         }
 
         // Wait until a data word is available in the TRNG_OUTPUT_X
@@ -2031,8 +2254,8 @@ int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
                 PKA_DEBUG(PKA_DEV,
                     "Shim %u got error obtaining random number\n",
                                 shim->shim_id);
-                mutex_unlock(&shim->mutex);
-                return -EBUSY;
+                ret = -EBUSY;
+                goto exit;
             }
         }
 
@@ -2043,6 +2266,7 @@ int pka_dev_trng_read(pka_dev_shim_t *shim, uint32_t *data, uint32_t cnt)
         data[data_idx] = (uint32_t) csr_reg_value;
     }
 
+exit:
     mutex_unlock(&shim->mutex);
     return ret;
 }
