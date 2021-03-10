@@ -17,6 +17,14 @@ operation such as signature generation and verification.
 The BlueField PKA engine might be integrated with OpenSSL 1.0 and 1.1.
 Earlier versions may or may not work; use at your own risk!
 
+Bluefield PKA engine can also be used with OpenSSL 3.0 provided OpenSSL 3.0
+is built with compatibility for OpenSSL 1.1. This can be done by passing the
+option "--api=1.1.0" during the configure step for OpenSSL 3.0.
+Once OpenSSL 3.0 is built with compatibility for OpenSSL 1.1, follow the steps
+below on how to build, install and use the Bluefield PKA engine.
+
+Currently, OpenSSL 3.0 is in alpha release (alpha12), so it is not a stable
+release; some of the advertised features might not work!
 
 ===============================================================================
 Important Notes

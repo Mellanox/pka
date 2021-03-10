@@ -65,6 +65,7 @@ struct ec_method_st {
      * EC_POINT_set_compressed_coordinates:
      */
     int (*point_set_to_infinity) (const EC_GROUP *, EC_POINT *);
+#if (OPENSSL_VERSION_NUMBER < 0x30000000L)
     int (*point_set_Jprojective_coordinates_GFp) (const EC_GROUP *,
                                                   EC_POINT *, const BIGNUM *x,
                                                   const BIGNUM *y,
@@ -73,6 +74,7 @@ struct ec_method_st {
                                                   const EC_POINT *, BIGNUM *x,
                                                   BIGNUM *y, BIGNUM *z,
                                                   BN_CTX *);
+#endif
     int (*point_set_affine_coordinates) (const EC_GROUP *, EC_POINT *,
                                          const BIGNUM *x, const BIGNUM *y,
                                          BN_CTX *);
@@ -169,6 +171,17 @@ struct ec_method_st {
     int (*ecdh_compute_key)(unsigned char **pout, size_t *poutlen,
                             const EC_POINT *pub_key, const EC_KEY *ecdh);
     /* Inverse modulo order */
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+    /* custom ECDSA */
+    int (*ecdsa_sign_setup)(EC_KEY *eckey, BN_CTX *ctx, BIGNUM **kinvp,
+                            BIGNUM **rp);
+    ECDSA_SIG *(*ecdsa_sign_sig)(const unsigned char *dgst, int dgstlen,
+                                 const BIGNUM *kinv, const BIGNUM *r,
+                                 EC_KEY *eckey);
+    int (*ecdsa_verify_sig)(const unsigned char *dgst, int dgstlen,
+                            const ECDSA_SIG *sig, EC_KEY *eckey);
+#endif
+
 #if (OPENSSL_VERSION_NUMBER > 0x10100000L)
     int (*field_inverse_mod_ord)(const EC_GROUP *, BIGNUM *r,
                                  const BIGNUM *x, BN_CTX *);
@@ -202,6 +215,10 @@ struct ec_group_st {
     BIGNUM *order, *cofactor;
     int curve_name;             /* optional NID for named curve */
     int asn1_flag;              /* flag to control the asn1 encoding */
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+    int decoded_from_explicit_params; /* set if decoded from explicit
+                                       * curve parameters encoding */
+#endif
     point_conversion_form_t asn1_form;
     unsigned char *seed;        /* optional seed for parameters (appears in
                                  * ASN1) */
@@ -261,6 +278,10 @@ struct ec_group_st {
         NISTZ256_PRE_COMP *nistz256;
         EC_PRE_COMP *ec;
     } pre_comp;
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+    OSSL_LIB_CTX *libctx;
+    char *propq;
+#endif
 };
 
 struct ec_key_st {
@@ -274,8 +295,17 @@ struct ec_key_st {
     point_conversion_form_t conv_form;
     int references;
     int flags;
+#ifndef FIPS_MODULE
     CRYPTO_EX_DATA ex_data;
+#endif
     CRYPTO_RWLOCK *lock;
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+    OSSL_LIB_CTX *libctx;
+    char *propq;
+
+    /* Provider data */
+    size_t dirty_cnt; /* If any key material changes, increment this */
+#endif
 };
 
 struct ec_point_st {
