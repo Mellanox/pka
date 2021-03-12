@@ -107,6 +107,15 @@
 #define TRNG_ALARMSTOP_ADDR     0x12058
 #define TRNG_BLOCKCNT_ADDR      0x120E8
 #define TRNG_OPTIONS_ADDR       0x120F0
+#define TRNG_TEST_ADDR          0x120E0
+#define TRNG_RAW_L_ADDR         0x12060
+#define TRNG_RAW_H_ADDR         0x12068
+#define TRNG_RUN_CNT_ADDR       0x12080
+#define TRNG_MONOBITCNT_ADDR    0x120B8
+#define TRNG_POKER_3_0_ADDR     0x120C0
+#define TRNG_POKER_7_4          0x120C8
+#define TRNG_POKER_B_8          0x120D0
+#define TRNG_POKER_F_C          0x120D8
 
 // Control register address/offset. This is accessed from the ARM using 8
 // byte reads/writes however only the bottom 32 bits are implemented.

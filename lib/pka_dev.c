@@ -32,6 +32,7 @@
 //
 
 #ifdef __KERNEL__
+#include <linux/delay.h>
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/ioport.h>
@@ -1107,6 +1108,341 @@ static int pka_dev_config_trng_clk(pka_dev_res_t *aic_csr_ptr)
     return ret;
 }
 
+static int pka_dev_trng_enable_test(void *csr_reg_ptr, uint64_t csr_reg_base,
+                                    uint32_t test)
+{
+    uint64_t csr_reg_val, csr_reg_off;
+
+    //  Set the ‘test_mode’ bit in the TRNG_CONTROL register and the
+    //  ‘test_known_noise’ bit in the TRNG_TEST register – this will
+    //  immediately set the ‘test_ready’ bit (in the TRNG_STATUS register)
+    //  to indicate that data can be written. It will also reset the
+    //  ‘monobit test’, ‘run test’ and ‘poker test’ circuits to their
+    //  initial states. Note that the TRNG need not be enabled for this
+    //  test.
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_CONTROL_ADDR);
+    csr_reg_val = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_CONTROL_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off,
+                     csr_reg_val | PKA_TRNG_CONTROL_TEST_MODE);
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_TEST_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, test);
+
+    // Wait until the 'test_ready' bit is set
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_STATUS_ADDR);
+    do
+    {
+        csr_reg_val = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+    } while((csr_reg_val & PKA_TRNG_STATUS_TEST_READY) == 0);
+
+    // Check whether the 'monobit test', 'run test' and 'poker test'
+    // are reset.
+    if (csr_reg_val & (PKA_TRNG_STATUS_MONOBIT_FAIL
+        | PKA_TRNG_STATUS_RUN_FAIL
+        | PKA_TRNG_STATUS_POKER_FAIL))
+    {
+        PKA_ERROR(PKA_DEV, "Test bits aren't reset, TRNG_STATUS:0x%llx\n",
+            csr_reg_val);
+        return -EAGAIN;
+    }
+
+    // Set 'stall_run_poker' bit to allow inspecting the state of the
+    // result counters which would otherwise be reset immediately for
+    // the next 20,000 bits block to test.
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_ALARMCNT_ADDR);
+    csr_reg_val = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off,
+                     csr_reg_val | PKA_TRNG_ALARMCNT_STALL_RUN_POKER);
+
+    return 0;
+}
+
+static int pka_dev_trng_test_circuits(void *csr_reg_ptr, uint64_t csr_reg_base,
+                                      uint64_t datal, uint64_t datah,
+                                      int count, uint8_t add_half,
+                                      uint64_t *monobit_fail_cnt,
+                                      uint64_t *run_fail_cnt,
+                                      uint64_t *poker_fail_cnt)
+{
+    uint64_t status, csr_reg_off;
+    int test_idx, error;
+
+    if (monobit_fail_cnt == NULL || run_fail_cnt == NULL || poker_fail_cnt == NULL)
+        return -EINVAL;
+
+    error = 0;
+
+    for (test_idx = 0; test_idx < count; test_idx++)
+    {
+        csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_RAW_L_ADDR);
+        pka_dev_io_write(csr_reg_ptr, csr_reg_off, datal);
+
+        if (add_half)
+        {
+            if (test_idx < count - 1)
+            {
+                csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_RAW_H_ADDR);
+                pka_dev_io_write(csr_reg_ptr, csr_reg_off, datah);
+            }
+        }
+        else
+        {
+            csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_RAW_H_ADDR);
+            pka_dev_io_write(csr_reg_ptr, csr_reg_off, datah);
+        }
+
+        // Wait until the ‘test_ready’ bit in the TRNG_STATUS register
+        // becomes ‘1’ again, signaling readiness for the next 64 bits
+        // of test data. At this point, the previous test data has
+        // been handled so the counter states can be inspected.
+        csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_STATUS_ADDR);
+        do
+        {
+            status = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+        } while((status & PKA_TRNG_STATUS_TEST_READY) == 0);
+
+        // Check test status bits.
+        csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_INTACK_ADDR);
+        if (status & PKA_TRNG_STATUS_MONOBIT_FAIL)
+        {
+            pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_STATUS_MONOBIT_FAIL);
+            *monobit_fail_cnt += 1;
+        }
+        else if (status & PKA_TRNG_STATUS_RUN_FAIL)
+        {
+            pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_STATUS_RUN_FAIL);
+            *run_fail_cnt += 1;
+        }
+        else if (status & PKA_TRNG_STATUS_POKER_FAIL)
+        {
+            pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_STATUS_POKER_FAIL);
+            *poker_fail_cnt += 1;
+        }
+
+    }
+
+    error = (*monobit_fail_cnt || *poker_fail_cnt || *run_fail_cnt) ? -EIO : 0;
+
+    return error;
+}
+
+static void pka_dev_trng_disable_test(void *csr_reg_ptr, uint64_t csr_reg_base)
+{
+    uint64_t status, val, csr_reg_off;
+
+    // When done, clear the ‘test_known_noise’ bit in the TRNG_TEST
+    // register (will immediately clear the ‘test_ready’ bit in the
+    // TRNG_STATUS register and reset the ‘monobit test’, ‘run test’
+    // and ‘poker test’ circuits) and clear the ‘test_mode’ bit in
+    // the TRNG_CONTROL register.
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_TEST_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, 0);
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_STATUS_ADDR);
+    status = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+
+    if (status & PKA_TRNG_STATUS_TEST_READY)
+        PKA_PRINT(PKA_DEV, "Warning: Test ready bit is still set\n");
+
+    if (status & (PKA_TRNG_STATUS_MONOBIT_FAIL
+        | PKA_TRNG_STATUS_RUN_FAIL
+        | PKA_TRNG_STATUS_POKER_FAIL))
+        PKA_PRINT(PKA_DEV,
+            "Warning: Test bits are still set, TRNG_STATUS:0x%llx\n", status);
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_CONTROL_ADDR);
+    val = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off,
+        (val & ~PKA_TRNG_STATUS_TEST_READY));
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base, TRNG_ALARMCNT_ADDR);
+    val = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off,
+        (val & ~PKA_TRNG_ALARMCNT_STALL_RUN_POKER));
+
+    return;
+}
+
+static int pka_dev_trng_test_known_answer_basic(void *csr_reg_ptr,
+                                                uint64_t csr_reg_base)
+{
+    int ret, cnt_idx, cnt_off;
+    uint64_t monobit_fail_cnt, run_fail_cnt, poker_fail_cnt, monobit_cnt;
+    uint64_t poker_cnt[4], csr_reg_off;
+    uint64_t poker_test_exp_cnt[4] = {
+        0x20f42bf4, 0xaf415f4, 0xf4f4fff4, 0xfff4f4f4
+    };
+
+    PKA_DEBUG(PKA_DEV, "Run known-answer test circuits\n");
+
+    monobit_fail_cnt = 0;
+    run_fail_cnt     = 0;
+    poker_fail_cnt   = 0;
+
+    ret = pka_dev_trng_enable_test(csr_reg_ptr, csr_reg_base,
+              PKA_TRNG_TEST_KNOWN_NOISE);
+    if (ret)
+        return ret;
+
+    ret = pka_dev_trng_test_circuits(csr_reg_ptr, csr_reg_base, 0x11111333,
+              0x3555779f, 11, 0, &monobit_fail_cnt, &run_fail_cnt,
+              &poker_fail_cnt);
+
+    ret |= pka_dev_trng_test_circuits(csr_reg_ptr, csr_reg_base, 0x01234567,
+               0x89abcdef, 302, 1, &monobit_fail_cnt, &run_fail_cnt,
+               &poker_fail_cnt);
+
+    PKA_DEBUG(PKA_DEV, "monobit_fail_cnt : 0x%llx\n", monobit_fail_cnt);
+    PKA_DEBUG(PKA_DEV, "poker_fail_cnt   : 0x%llx\n", poker_fail_cnt);
+    PKA_DEBUG(PKA_DEV, "run_fail_cnt     : 0x%llx\n", run_fail_cnt);
+
+    for (cnt_idx = 0, cnt_off = 0; cnt_idx < 4; cnt_idx++, cnt_off += 8)
+    {
+        csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                          (TRNG_POKER_3_0_ADDR + cnt_off));
+        poker_cnt[cnt_idx] = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+    }
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                      TRNG_MONOBITCNT_ADDR);
+    monobit_cnt = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+
+    if (!ret)
+    {
+        if (memcmp(poker_cnt, poker_test_exp_cnt, sizeof(poker_test_exp_cnt)))
+        {
+            PKA_DEBUG(PKA_DEV, "invalid poker counters!\n");
+            ret = -EIO;
+        }
+
+        if (monobit_cnt != 9978)
+        {
+            PKA_DEBUG(PKA_DEV, "invalid sum of squares!\n");
+            ret = -EIO;
+        }
+    }
+
+    pka_dev_trng_disable_test(csr_reg_ptr, csr_reg_base);
+
+    return ret;
+}
+
+static int pka_dev_trng_test_known_answer_poker_fail(void *csr_reg_ptr,
+                                                     uint64_t csr_reg_base)
+{
+    uint64_t monobit_fail_cnt, run_fail_cnt, poker_fail_cnt;
+    int ret;
+
+    monobit_fail_cnt = 0;
+    run_fail_cnt     = 0;
+    poker_fail_cnt   = 0;
+
+    PKA_DEBUG(PKA_DEV, "Run known-answer test circuits (poker fail)\n");
+
+    pka_dev_trng_enable_test(csr_reg_ptr, csr_reg_base,
+        PKA_TRNG_TEST_KNOWN_NOISE);
+
+    // Ignore the return value here as it is expected that poker test should
+    // fail. Check failure counts thereafter to assert only poker test has failed.
+    pka_dev_trng_test_circuits(csr_reg_ptr, csr_reg_base, 0xffffffff,
+        0xffffffff, 11, 0, &monobit_fail_cnt, &run_fail_cnt, &poker_fail_cnt);
+
+    PKA_DEBUG(PKA_DEV, "monobit_fail_cnt : 0x%llx\n", monobit_fail_cnt);
+    PKA_DEBUG(PKA_DEV, "poker_fail_cnt   : 0x%llx\n", poker_fail_cnt);
+    PKA_DEBUG(PKA_DEV, "run_fail_cnt     : 0x%llx\n", run_fail_cnt);
+
+    if (poker_fail_cnt && !run_fail_cnt && !monobit_fail_cnt)
+        ret = 0;
+    else
+        ret = -EIO;
+
+    pka_dev_trng_disable_test(csr_reg_ptr, csr_reg_base);
+
+    return ret;
+}
+
+static int pka_dev_trng_test_unknown_answer(void *csr_reg_ptr,
+                                            uint64_t csr_reg_base)
+{
+    uint64_t datal, datah, csr_reg_off;
+    int ret, test_idx;
+
+    datah = 0;
+    datal = 0;
+    ret   = 0;
+
+    PKA_DEBUG(PKA_DEV, "Run unknown-answer self test\n");
+
+    // First reset, the RAW registers.
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                      TRNG_RAW_L_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, 0);
+
+    csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                      TRNG_RAW_H_ADDR);
+    pka_dev_io_write(csr_reg_ptr, csr_reg_off, 0);
+
+    // There is a small probability for this test to fail,
+    // So run the test 10 times, if it succeeds once then
+    // assume that the test passed.
+    for (test_idx = 0; test_idx < 10; test_idx++)
+    {
+        pka_dev_trng_enable_test(csr_reg_ptr, csr_reg_base, PKA_TRNG_TEST_NOISE);
+
+        csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                          TRNG_RAW_L_ADDR);
+        datal = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+
+        csr_reg_off = pka_dev_get_register_offset(csr_reg_base,
+                          TRNG_RAW_H_ADDR);
+        datah = pka_dev_io_read(csr_reg_ptr, csr_reg_off);
+
+        PKA_DEBUG(PKA_DEV, "datal=0x%llx\n", datal);
+        PKA_DEBUG(PKA_DEV, "datah=0x%llx\n", datah);
+
+        if (!datah && !datal)
+        {
+            ret = -EIO;
+        }
+        else
+        {
+            ret = 0;
+            break;
+        }
+
+        pka_dev_trng_disable_test(csr_reg_ptr, csr_reg_base);
+    }
+
+    return ret;
+}
+
+// Test TRNG
+static int pka_dev_test_trng(void *csr_reg_ptr, uint64_t csr_reg_base)
+{
+    int ret;
+
+    ret = 0;
+
+    ret = pka_dev_trng_test_known_answer_basic(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        goto exit;
+
+    ret = pka_dev_trng_test_known_answer_poker_fail(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        goto exit;
+
+    ret = pka_dev_trng_test_unknown_answer(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        goto exit;
+
+exit:
+    return ret;
+}
+
+
 // Configure the TRNG.
 static int pka_dev_config_trng(pka_dev_res_t *aic_csr_ptr,
                                pka_dev_res_t *trng_csr_ptr)
@@ -1169,6 +1505,11 @@ static int pka_dev_config_trng(pka_dev_res_t *aic_csr_ptr,
             pka_dev_get_register_offset(csr_reg_base, TRNG_FROENABLE_ADDR);
     pka_dev_io_write(csr_reg_ptr, csr_reg_off, PKA_TRNG_FROENABLE_REG_VAL);
 
+    // Run TRNG tests after configuring TRNG.
+    // NOTE: TRNG need not be enabled to carry out these tests.
+    if (!ret)
+        ret = pka_dev_test_trng(csr_reg_ptr, csr_reg_base);
+
     // Start the actual engine by setting the 'enable_trng' bit in the
     // TRNG_CONTROL register (also a nice point to set the interrupt mask
     // bits).
@@ -1181,6 +1522,8 @@ static int pka_dev_config_trng(pka_dev_res_t *aic_csr_ptr,
     // fields of the TRNG_INTACK register. This allows delaying the data
     // available interrupt until the indicated number of 128-bit words are
     // available in the buffer RAM.
+
+    mdelay(200);
 
     return ret;
 }
@@ -1232,7 +1575,7 @@ static int pka_dev_ram_zeroize(pka_dev_res_t *ext_csr_ptr)
 static int pka_dev_init_shim(pka_dev_shim_t *shim)
 {
     const uint32_t *farm_img_ptr;
-    uint32_t        farm_img_size;
+    uint32_t        farm_img_size, data[4], i;
     uint8_t         shim_fw_id;
 
     int ret = 0;
@@ -1305,7 +1648,19 @@ static int pka_dev_init_shim(pka_dev_shim_t *shim)
 
     // Configure the TRNG
     ret = pka_dev_config_trng(&shim->resources.aic_csr,
-                                &shim->resources.trng_csr);
+                              &shim->resources.trng_csr);
+
+    // Pull out data from the content of the TRNG buffer RAM and
+    // start the re-generation of new numbers; read and drop 512
+    // words. The read must be done over the 4 TRNG_OUTPUT_X registers
+    // at a time.
+    i = 0;
+    while (i < 128)
+    {
+        pka_dev_trng_read(shim, data, sizeof(data));
+        i++;
+    }
+
     if (ret)
     {
         // Keep running without TRNG since it does not hurt, but
