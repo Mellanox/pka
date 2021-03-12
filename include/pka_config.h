@@ -178,8 +178,23 @@
 // TRNG Control Register Value; Set bit 10 to start the EIP-76 a.k.a TRNG
 // engine, gathering entropy from the FROs.
 #define PKA_TRNG_CONTROL_REG_VAL            0x00000400
+
+// TRNG Control bit
+#define PKA_TRNG_CONTROL_TEST_MODE          0x100
+
 // TRNG Status bits
 #define PKA_TRNG_STATUS_READY               0x1
 #define PKA_TRNG_STATUS_SHUTDOWN_OFLO       0x2
+#define PKA_TRNG_STATUS_TEST_READY          0x100
+#define PKA_TRNG_STATUS_MONOBIT_FAIL        0x80
+#define PKA_TRNG_STATUS_RUN_FAIL            0x10
+#define PKA_TRNG_STATUS_POKER_FAIL          0x40
+
+// TRNG Alarm Counter bits
+#define PKA_TRNG_ALARMCNT_STALL_RUN_POKER   0x8000
+
+// TRNG Test bits
+#define PKA_TRNG_TEST_KNOWN_NOISE           0x20
+#define PKA_TRNG_TEST_NOISE                 0x2000
 
 #endif // __PKA_CONFIG_H__
