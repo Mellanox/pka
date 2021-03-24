@@ -66,6 +66,93 @@
 #define handle_is_valid(hdl) \
     ((hdl) != PKA_HANDLE_INVALID && (hdl) != 0)
 
+// 2^255 - 19 in big-endian
+static uint8_t curve25519_p_buf[] =
+{
+    0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xED
+};
+
+// 486662 in big-endian
+static uint8_t curve25519_A_buf[] =
+{
+    0x07, 0x6D, 0x06
+};
+
+// In big endian order
+uint8_t Curve255_bp_u_buf[] =
+{
+    0x09
+};
+
+// In big endian order
+uint8_t Curve255_bp_v_buf[] =
+{
+    0x20, 0xAE, 0x19, 0xA1, 0xB8, 0xA0, 0x86, 0xB4,
+    0xE0, 0x1E, 0xDD, 0x2C, 0x77, 0x48, 0xD1, 0x4C,
+    0x92, 0x3D, 0x4D, 0x7E, 0x6D, 0x7C, 0x61, 0xB2,
+    0x29, 0xE9, 0xC5, 0xA2, 0x7E, 0xCE, 0xD3, 0xD9
+};
+
+// In big endian order
+uint8_t Curve255_bp_order_buf[] =
+{
+    0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x14, 0xDE, 0xF9, 0xDE, 0xA2, 0xF7, 0x9C, 0xD6,
+    0x58, 0x12, 0x63, 0x1A, 0x5C, 0xF5, 0xD3, 0xED
+};
+
+// 2^448 - 2^224 - 1 in big-endian
+static uint8_t curve448_p_buf[] =
+{
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
+// 156326 in big-endian
+static uint8_t curve448_A_buf[] =
+{
+    0x02, 0x62, 0xA6
+};
+
+uint8_t Curve448_bp_u_buf[] =
+{
+    0x05
+};
+
+uint8_t Curve448_bp_v_buf[] =
+{
+    0x7D, 0x23, 0x5D, 0x12, 0x95, 0xF5, 0xB1, 0xF6,
+    0x6C, 0x98, 0xAB, 0x6E, 0x58, 0x32, 0x6F, 0xCE,
+    0xCB, 0xAE, 0x5D, 0x34, 0xF5, 0x55, 0x45, 0xD0,
+    0x60, 0xF7, 0x5D, 0xC2, 0x8D, 0xF3, 0xF6, 0xED,
+    0xB8 ,0x02, 0x7E, 0x23, 0x46, 0x43, 0x0D, 0x21,
+    0x13, 0x12, 0xC4, 0xB1, 0x50, 0x67, 0x7A, 0xF7,
+    0x6F, 0xD7, 0x22, 0x3D, 0x45, 0x7B, 0x5B, 0x1A
+};
+
+uint8_t Curve448_bp_order_buf[] =
+{
+    0x3F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0x7C, 0xCA, 0x23, 0xE9,
+    0xC4, 0x4E, 0xDB, 0x49, 0xAE, 0xD6, 0x36, 0x90,
+    0x21, 0x6C, 0xC2, 0x72, 0x8D, 0xC5, 0x8F, 0x55,
+    0x23, 0x78, 0xC2, 0x92, 0xAB, 0x58, 0x44, 0xF3
+};
+
+ecc_mont_curve_t curve25519;
+ecc_mont_curve_t curve448;
+
 // The actual engine that provides PKA support. For now, a single process
 // is allowed.
 static pka_engine_info_t gbl_engine;
@@ -85,6 +172,119 @@ static uint32_t gbl_engine_finish;
     if (level & DEBUG_MODE)                     \
         PKA_PRINT(PKA_ENGINE, fmt_and_args);    \
 })
+
+ENGINE_PKA_KEYPAIR *engine_pka_keypair_new(int nid, int flag, int size)
+{
+    ENGINE_PKA_KEYPAIR *kpair = NULL;
+
+    kpair = OPENSSL_secure_malloc(sizeof(*kpair));
+    if (kpair == NULL)
+    {
+        printf("ERROR: %s: Memory allocation failed\n", __func__);
+        goto exit;
+    }
+
+    kpair->nid = nid;
+    if (flag == PKA_NO_FLAG)
+    {
+        kpair->private_key.buf_len = size;
+        kpair->private_key.actual_len = size;
+        kpair->private_key.buf_ptr = OPENSSL_secure_malloc(size);
+        if(kpair->private_key.buf_ptr == NULL)
+        {
+            printf("ERROR: %s: "
+                   "Private key memory allocation failed\n", __func__);
+            goto exit;
+        }
+        kpair->has_private = true;
+
+        kpair->public_key.buf_len = size;
+        kpair->public_key.actual_len = size;
+        kpair->public_key.buf_ptr = OPENSSL_secure_malloc(size);
+        if(kpair->public_key.buf_ptr == NULL)
+        {
+            printf("ERROR: %s: "
+                   "Public key memory allocation failed\n", __func__);
+            goto exit;
+        }
+    }
+    else if (flag == PKA_NO_PRIV_KEY)
+    {
+        kpair->has_private = false;
+
+        kpair->public_key.buf_len = size;
+        kpair->public_key.actual_len = size;
+        kpair->public_key.buf_ptr = OPENSSL_secure_malloc(size);
+        if(kpair->public_key.buf_ptr == NULL)
+        {
+            printf("ERROR: %s: "
+                   "Public key memory allocation failed\n", __func__);
+            goto exit;
+        }
+    }
+
+    return kpair;
+
+exit:
+    if (kpair)
+    {
+        if (kpair->private_key.buf_ptr)
+            OPENSSL_secure_free(kpair->private_key.buf_ptr);
+
+        if (kpair->public_key.buf_ptr)
+            OPENSSL_secure_free(kpair->public_key.buf_ptr);
+
+        OPENSSL_secure_free(kpair);
+    }
+
+    return NULL;
+}
+
+int engine_pka_keypair_free(ENGINE_PKA_KEYPAIR *kpair)
+{
+    if (!kpair)
+        return 0;
+
+    if (kpair->private_key.buf_ptr)
+        OPENSSL_secure_free(kpair->private_key.buf_ptr);
+
+    if (kpair->public_key.buf_ptr)
+        OPENSSL_secure_free(kpair->public_key.buf_ptr);
+
+    OPENSSL_secure_free(kpair);
+
+    return 1;
+}
+
+
+static void byte_swap_copy(uint8_t *dest, uint8_t *src, uint32_t len)
+{
+    uint32_t idx;
+
+    for (idx = 0; idx < len; idx++)
+        dest[idx] = src[(len - 1) - idx];
+}
+
+void set_pka_operand(pka_operand_t *operand,
+                     uint8_t       *big_endian_buf_ptr,
+                     uint32_t       buf_len,
+                     uint8_t        big_endian)
+{
+    operand->big_endian = big_endian;
+    operand->buf_len    = buf_len;
+    operand->actual_len = buf_len;
+    operand->buf_ptr    = malloc(buf_len);
+    memset(operand->buf_ptr, 0, buf_len);
+
+    operand->buf_len    = buf_len;
+    operand->actual_len = buf_len;
+
+    // Now fill the operand buf.
+    if (big_endian)
+        memcpy(operand->buf_ptr, big_endian_buf_ptr, buf_len);
+    else
+        byte_swap_copy(operand->buf_ptr, big_endian_buf_ptr, buf_len);
+}
 
 static void copy_operand(pka_operand_t *src, pka_operand_t *dst)
 {
@@ -266,6 +466,10 @@ static void free_ecc_operand_buf(pka_operand_t *operand)
 
     if (buf_ptr != NULL)
         free(buf_ptr);
+
+    operand->buf_ptr    = NULL;
+    operand->buf_len    = 0;
+    operand->actual_len = 0;
 }
 
 static void free_ecc_point(ecc_point_t *point)
@@ -277,6 +481,43 @@ static void free_ecc_point(ecc_point_t *point)
     free_ecc_operand_buf(&point->y);
 
     free(point);
+
+    point = NULL;
+}
+
+static void make_operand_buf(pka_operand_t *operand,
+                             uint8_t       *big_endian_buf_ptr,
+                             uint32_t       buf_len)
+{
+    operand->buf_ptr = malloc(buf_len);
+    memset(operand->buf_ptr, 0, buf_len);
+    operand->buf_len    = buf_len;
+    operand->actual_len = buf_len;
+    // Now fill the operand buf.
+    operand_byte_copy(operand, big_endian_buf_ptr, buf_len);
+}
+
+static ecc_point_t *make_mont_ecc_point(ecc_mont_curve_t *curve,
+                                        uint8_t          *big_endian_buf_x_ptr,
+                                        uint32_t          buf_x_len,
+                                        uint8_t          *big_endian_buf_y_ptr,
+                                        uint32_t          buf_y_len,
+                                        uint8_t           big_endian)
+{
+    ecc_point_t *ecc_point;
+
+    ecc_point = malloc(sizeof(ecc_point_t));
+    memset(ecc_point, 0, sizeof(ecc_point_t));
+
+    make_operand_buf(&ecc_point->x, big_endian_buf_x_ptr, buf_x_len);
+    make_operand_buf(&ecc_point->y, big_endian_buf_y_ptr, buf_y_len);
+
+    return ecc_point;
+}
+
+static void free_mont_ecc_point(ecc_point_t *pt)
+{
+    free_ecc_point(pt);
 }
 
 #ifdef VERBOSE_MODE
@@ -649,7 +890,34 @@ static void pka_engine_put_handle(pka_engine_info_t *engine)
     reset_pka_handle(*handle);
 }
 
-// This functions creates a PKA instance to be used by the engine. Retruns 1
+static void init_mont_curve25519(void)
+{
+    memset(&curve25519, 0, sizeof(curve25519));
+    set_pka_operand(&curve25519.p, curve25519_p_buf,
+                    sizeof(curve25519_p_buf), 0);
+    set_pka_operand(&curve25519.A, curve25519_A_buf,
+                    sizeof(curve25519_A_buf), 0);
+    curve25519.type = PKA_CURVE_25519;
+}
+
+static void init_mont_curve448(void)
+{
+    memset(&curve448, 0, sizeof(curve448));
+    set_pka_operand(&curve448.p, curve448_p_buf,
+                    sizeof(curve448_p_buf), 0);
+    set_pka_operand(&curve448.A, curve448_A_buf,
+                    sizeof(curve448_A_buf), 0);
+    curve448.type = PKA_CURVE_448;
+}
+
+static void init_mont_curves(void)
+{
+    // Initialize the two Montgomery curves
+    init_mont_curve25519();
+    init_mont_curve448();
+}
+
+// This functions creates a PKA instance to be used by the engine. Returns 1
 // on success, 0 on failure.
 static int pka_engine_get_instance(pka_engine_info_t *engine)
 {
@@ -674,7 +942,10 @@ static int pka_engine_get_instance(pka_engine_info_t *engine)
                                         cmd_queue_sz,
                                         rslt_queue_sz);
         set_pka_instance(engine, instance);
+
         return_if_instance_invalid(engine->instance);
+
+        init_mont_curves();
     }
 
     return 1;
@@ -971,6 +1242,122 @@ int  pka_bn_mod_inv(pka_bignum_t *bn_value,
     free_operand(value);
     free_operand(modulus);
     free_operand(result);
+
+    return rc;
+}
+
+int pka_mont_25519_mult(unsigned char *buf,
+                        pka_operand_t *point_x,
+                        pka_operand_t *multiplier)
+{
+    pka_operand_t *result;
+    int rc;
+
+    PKA_ASSERT(buf != NULL);
+    PKA_ASSERT(point_x != NULL);
+    PKA_ASSERT(multiplier != NULL);
+
+    return_if_handle_invalid(tls_handle);
+
+    rc = pka_mont_ecdh_mult(tls_handle, NULL, &curve25519, point_x, multiplier);
+
+    if (SUCCESS != rc)
+    {
+        DEBUG(PKA_D_ERROR, "pka_mont_ecdh_mult failed, rc=%d\n", rc);
+#ifdef VERBOSE_MODE
+        print_operand("  point_x    =", point_x, "\n");
+        print_operand("  multiplier =", multiplier, "\n");
+#endif
+        return 0;
+    }
+    else
+    {
+        rc = 1;
+    }
+
+    result = results_to_operand(tls_handle);
+
+    memcpy(buf, result->buf_ptr, PKA_25519_PUBKEY_SIZE);
+
+    free_operand(result);
+
+    return rc;
+}
+
+int pka_mont_25519_derive_pubkey(unsigned char *buf,
+                                 pka_operand_t *priv_key)
+{
+    ecc_point_t *base_pt;
+    int rc;
+
+    base_pt = make_mont_ecc_point(&curve25519,
+                                  Curve255_bp_u_buf,
+                                  sizeof(Curve255_bp_u_buf),
+                                  Curve255_bp_v_buf,
+                                  sizeof(Curve255_bp_u_buf),
+                                  0);
+
+    rc = pka_mont_25519_mult(buf, &base_pt->x, priv_key);
+
+    free_mont_ecc_point(base_pt);
+
+    return rc;
+}
+
+int pka_mont_448_mult(unsigned char *buf,
+                      pka_operand_t *point_x,
+                      pka_operand_t *multiplier)
+{
+    pka_operand_t *result;
+    int rc;
+
+    PKA_ASSERT(buf != NULL);
+    PKA_ASSERT(point_x != NULL);
+    PKA_ASSERT(multiplier != NULL);
+
+    return_if_handle_invalid(tls_handle);
+
+    rc = pka_mont_ecdh_mult(tls_handle, NULL, &curve448, point_x, multiplier);
+
+    if (SUCCESS != rc)
+    {
+        DEBUG(PKA_D_ERROR, "pka_mont_ecdh_mult failed, rc=%d\n", rc);
+#ifdef VERBOSE_MODE
+        print_operand("  point_x    =", point_x, "\n");
+        print_operand("  multiplier =", multiplier, "\n");
+#endif
+        return 0;
+    }
+    else
+    {
+        rc = 1;
+    }
+
+    result = results_to_operand(tls_handle);
+
+    memcpy(buf, result->buf_ptr, PKA_448_PUBKEY_SIZE);
+
+    free_operand(result);
+
+    return rc;
+}
+
+int pka_mont_448_derive_pubkey(unsigned char *buf,
+                               pka_operand_t *priv_key)
+{
+    ecc_point_t *base_pt;
+    int rc;
+
+    base_pt = make_mont_ecc_point(&curve448,
+                                  Curve448_bp_u_buf,
+                                  sizeof(Curve255_bp_u_buf),
+                                  Curve448_bp_v_buf,
+                                  sizeof(Curve448_bp_u_buf),
+                                  0);
+
+    rc = pka_mont_448_mult(buf, &base_pt->x, priv_key);
+
+    free_mont_ecc_point(base_pt);
 
     return rc;
 }

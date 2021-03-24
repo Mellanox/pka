@@ -24,6 +24,10 @@
 #include <openssl/ssl.h>
 #include <openssl/modes.h>
 #include <openssl/ossl_typ.h>
+#include <openssl/obj_mac.h>
+
+#include <openssl/err.h>
+#include <openssl/x509.h>
 
 #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 #include "ec_local.h"
@@ -120,6 +124,63 @@ static DH_METHOD *pka_dh_meth = NULL;
 
 /* EC stuff */
 #ifndef NO_EC
+
+#ifndef OPENSSL_V102_COMPAT
+#define RC_CONST const
+#else
+#define RC_CONST
+#endif
+
+/*------------------- PKEY methods -------------------*/
+static int engine_pka_register_methods();
+
+static int engine_pka_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth, const int **nids, int nid);
+
+static int engine_pka_pkey_asn1_meths(ENGINE *e, EVP_PKEY_ASN1_METHOD **ameth,
+                                      const int **nids, int nid);
+
+static int engine_pka_pkey_meth_nids[] = {
+    0 /* NID_X25519 */,
+    0 /* NID_X448 */,
+    0
+};
+
+static int engine_pka_pkey_asn1_meth_nids[] = {
+    0 /* NID_X25519 */,
+    0 /* NID_X448 */,
+    0
+};
+
+static int engine_pka_pkey_meth_nids_init()
+{
+    engine_pka_pkey_meth_nids[0] = NID_X25519;
+    engine_pka_pkey_meth_nids[1] = NID_X448;
+
+    return 1;
+}
+
+static int engine_pka_pkey_asn1_meth_nids_init()
+{
+    engine_pka_pkey_asn1_meth_nids[0] = NID_X25519;
+    engine_pka_pkey_asn1_meth_nids[1] = NID_X448;
+
+    return 1;
+}
+
+struct engine_pka_nid_data_st engine_pka_nid_data[] = {
+    { "X25519", PKA_25519_PRIKEY_SIZE, PKA_25519_PUBKEY_SIZE,
+      pka_mont_25519_derive_pubkey },
+    { "X448", PKA_448_PRIKEY_SIZE, PKA_448_PUBKEY_SIZE,
+      pka_mont_448_derive_pubkey },
+};
+
+
+static EVP_PKEY_METHOD *engine_pka_pmeth_X25519 = NULL;
+static EVP_PKEY_METHOD *engine_pka_pmeth_X448 = NULL;
+
+static EVP_PKEY_ASN1_METHOD *engine_pka_ameth_X25519 = NULL;
+static EVP_PKEY_ASN1_METHOD *engine_pka_ameth_X448 = NULL;
+
 /* ECC POINT ADD */
 static int
 engine_pka_ecc_pt_add(const EC_GROUP *group, EC_POINT *r, const EC_POINT *a,
@@ -425,6 +486,39 @@ static int bind_pka(ENGINE *e)
 #endif
 # endif
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+#ifndef NO_EC
+    if (!engine_pka_pkey_meth_nids_init())
+    {
+        printf("ERROR: %s: PKEY methods NID init failed\n", __func__);
+        return 0;
+    }
+
+    if (!engine_pka_pkey_asn1_meth_nids_init())
+    {
+        printf("ERROR: %s: ASN1 methods NID init failed\n", __func__);
+        return 0;
+    }
+
+    if (!engine_pka_register_methods())
+    {
+        printf("ERROR: %s: pka_register_methods failed\n", __func__);
+        return 0;
+    }
+
+    if (!ENGINE_set_pkey_meths(e, engine_pka_pkey_meths))
+    {
+        printf("ERROR: %s: Set PKEY methods failed\n", __func__);
+        return 0;
+    }
+
+    if (!ENGINE_set_pkey_asn1_meths(e, engine_pka_pkey_asn1_meths))
+    {
+        printf("ERROR: %s: Set ASN1 methods failed\n", __func__);
+        return 0;
+    }
+#endif /* NO_EC */
+#endif /* OpenSSL >= 1.1.0 */
     if (rc != ENGINE_set_id(e, engine_pka_id)
         || rc != ENGINE_set_name(e, engine_pka_name)
 #ifndef NO_RAND
@@ -596,6 +690,7 @@ engine_pka_random_status(void)
 #endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+
 /* BN_mod_inv */
 static int
 engine_pka_bn_mod_inv(const EC_GROUP *group, BIGNUM *r, const BIGNUM *x,
@@ -829,6 +924,740 @@ static int engine_pka_dh_finish(DH *dh)
 #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 
 #ifndef NO_EC
+
+static int
+engine_pka_pkey_meths(ENGINE *e, EVP_PKEY_METHOD **pmeth, const int **nids, int nid)
+{
+    if (!pmeth)
+    {
+        *nids = engine_pka_pkey_meth_nids;
+        return sizeof_static_array(engine_pka_pkey_meth_nids) - 1;
+    }
+
+    if (nid == NID_X25519)
+    {
+        *pmeth = engine_pka_pmeth_X25519;
+        return 1;
+    }
+    else if (nid == NID_X448)
+    {
+        *pmeth = engine_pka_pmeth_X448;
+        return 1;
+    }
+
+    *pmeth = NULL;
+    return 0;
+}
+
+static int
+engine_pka_pkey_asn1_meths(ENGINE *e, EVP_PKEY_ASN1_METHOD **ameth,
+                           const int **nids, int nid)
+{
+    if (!ameth)
+    {
+        *nids = engine_pka_pkey_asn1_meth_nids;
+        return sizeof_static_array(engine_pka_pkey_asn1_meth_nids) - 1;
+    }
+
+    if (nid == NID_X25519)
+    {
+        *ameth = engine_pka_ameth_X25519;
+        return 1;
+    }
+    else if (nid == NID_X448)
+    {
+        *ameth = engine_pka_ameth_X448;
+        return 1;
+    }
+
+    *ameth = NULL;
+    return 0;
+}
+
+/* Montgomery curve 25519 PKEY operations */
+
+static int engine_pka_X25519_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey)
+{
+    ENGINE_PKA_KEYPAIR *kpair = NULL;
+
+    kpair = engine_pka_keypair_new(NID_X25519, 0, PKA_25519_PRIKEY_SIZE);
+    if (!kpair)
+    {
+        printf("ERROR: %s: Invalid keypair\n", __func__);
+        goto err;
+    }
+
+    if (!engine_pka_get_random_bytes(kpair->private_key.buf_ptr,
+                                     PKA_25519_PRIKEY_SIZE))
+    {
+        printf("ERROR: %s: Failed to get random bytes\n", __func__);
+        goto err;
+    }
+
+    if (!pka_mont_25519_derive_pubkey(kpair->public_key.buf_ptr,
+                                      &kpair->private_key))
+    {
+        printf("ERROR: %s: Failed to generate public key\n", __func__);
+        goto err;
+    }
+
+    EVP_PKEY_assign(pkey, NID_X25519, kpair);
+    return 1;
+
+err:
+    if (kpair)
+        engine_pka_keypair_free(kpair);
+    return 0;
+}
+
+static int
+engine_pka_X25519_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen)
+{
+    EVP_PKEY *ossl_pkey, *ossl_peerkey;
+    ENGINE_PKA_KEYPAIR *pkey, *peerkey;
+
+    ossl_pkey = EVP_PKEY_CTX_get0_pkey(ctx);
+    ossl_peerkey = EVP_PKEY_CTX_get0_peerkey(ctx);
+
+    if (ossl_pkey == NULL || ossl_peerkey == NULL)
+    {
+        printf("ERROR: %s: Keys are not set\n", __func__);
+        return 0;
+    }
+
+    pkey = EVP_PKEY_get0(ossl_pkey);
+    peerkey = EVP_PKEY_get0(ossl_peerkey);
+
+    if (engine_pka_keypair_invalid(pkey, NID_X25519, 1))
+    {
+        printf("ERROR: %s: pkey is invalid\n", __func__);
+        return 0;
+    }
+
+    if (engine_pka_keypair_invalid(peerkey, NID_X25519, 1))
+    {
+        printf("ERROR: %s: peerkey is invalid\n", __func__);
+        return 0;
+    }
+    *keylen = PKA_25519_PUBKEY_SIZE;
+
+    if (key != NULL &&
+        !pka_mont_25519_mult(key, &peerkey->public_key,
+                             &pkey->private_key))
+        return 0;
+
+    return 1;
+}
+
+/* Montgomery Curve 448 PKEY operations */
+
+static int engine_pka_X448_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY *pkey)
+{
+    ENGINE_PKA_KEYPAIR *kpair = NULL;
+
+    kpair = engine_pka_keypair_new(NID_X448, 0, PKA_448_PRIKEY_SIZE);
+    if (!kpair)
+    {
+        printf("ERROR: %s: Invalid keypair\n", __func__);
+        goto err;
+    }
+
+    if (!engine_pka_get_random_bytes(kpair->private_key.buf_ptr,
+                                     PKA_448_PRIKEY_SIZE))
+    {
+        printf("ERROR: %s: Failed to get random bytes\n", __func__);
+        goto err;
+    }
+
+    if (!pka_mont_448_derive_pubkey(kpair->public_key.buf_ptr,
+                                    &kpair->private_key))
+    {
+        printf("ERROR: %s: Failed to generate public key\n", __func__);
+        goto err;
+    }
+
+    EVP_PKEY_assign(pkey, NID_X448, kpair);
+    return 1;
+
+err:
+    if (kpair)
+        engine_pka_keypair_free(kpair);
+    return 0;
+}
+
+static int
+engine_pka_X448_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen)
+{
+    EVP_PKEY *ossl_pkey, *ossl_peerkey;
+    ENGINE_PKA_KEYPAIR *pkey, *peerkey;
+
+    ossl_pkey = EVP_PKEY_CTX_get0_pkey(ctx);
+    ossl_peerkey = EVP_PKEY_CTX_get0_peerkey(ctx);
+
+    if (ossl_pkey == NULL || ossl_peerkey == NULL)
+    {
+        printf("ERROR: %s: Keys are not set\n", __func__);
+        return 0;
+    }
+
+    pkey = EVP_PKEY_get0(ossl_pkey);
+    peerkey = EVP_PKEY_get0(ossl_peerkey);
+
+    if (engine_pka_keypair_invalid(pkey, NID_X448, 1))
+    {
+        printf("ERROR: %s: pkey is invalid\n", __func__);
+        return 0;
+    }
+
+    if (engine_pka_keypair_invalid(peerkey, NID_X448, 1))
+    {
+        printf("ERROR: %s: peerkey is invalid\n", __func__);
+        return 0;
+    }
+    *keylen = PKA_448_PUBKEY_SIZE;
+
+    if (key != NULL &&
+        !pka_mont_448_mult(key, &peerkey->public_key,
+                           &pkey->private_key))
+        return 0;
+
+    return 1;
+}
+
+static int engine_pka_X_ctrl(EVP_PKEY_CTX *ctx, int type, int p1, void *p2)
+{
+    if (type == EVP_PKEY_CTRL_PEER_KEY)
+        return 1;
+
+    return -2;
+}
+
+static void engine_pka_register_X25519(EVP_PKEY_METHOD *pmeth)
+{
+    EVP_PKEY_meth_set_derive(pmeth, NULL, engine_pka_X25519_derive);
+    EVP_PKEY_meth_set_keygen(pmeth, NULL, engine_pka_X25519_keygen);
+    EVP_PKEY_meth_set_ctrl(pmeth, engine_pka_X_ctrl, NULL);
+}
+
+static void engine_pka_register_X448(EVP_PKEY_METHOD *pmeth)
+{
+    EVP_PKEY_meth_set_derive(pmeth, NULL, engine_pka_X448_derive);
+    EVP_PKEY_meth_set_keygen(pmeth, NULL, engine_pka_X448_keygen);
+    EVP_PKEY_meth_set_ctrl(pmeth, engine_pka_X_ctrl, NULL);
+}
+
+static int
+engine_pka_register_pmeth(int id, EVP_PKEY_METHOD **pmeth, int flags)
+{
+    *pmeth = EVP_PKEY_meth_new(id, flags);
+
+    if (*pmeth == NULL)
+        return 0;
+
+    if (id == NID_X25519)
+        engine_pka_register_X25519(*pmeth);
+    else if (id == NID_X448)
+        engine_pka_register_X448(*pmeth);
+    else
+        return 0;
+
+    return 1;
+}
+
+static void engine_pka_key_free(EVP_PKEY *pkey)
+{
+    ENGINE_PKA_KEYPAIR *kpair = EVP_PKEY_get0(pkey);
+
+    engine_pka_keypair_free(kpair);
+}
+
+const struct engine_pka_nid_data_st *engine_pka_get_nid_data(int nid)
+{
+    if (nid == NID_X25519)
+        return &engine_pka_nid_data[0];
+    else if (nid == NID_X448)
+        return &engine_pka_nid_data[1];
+
+    return NULL;
+}
+
+static int engine_pka_key_print(BIO *bp, const EVP_PKEY *pkey,
+                                int indent, ASN1_PCTX *ctx, int priv)
+{
+    if (!pkey)
+        return 0;
+
+    const ENGINE_PKA_KEYPAIR *kpair = EVP_PKEY_get0(pkey);
+    const struct engine_pka_nid_data_st *nid_data = NULL;
+
+    if (engine_pka_keypair_invalid(kpair, NID_X25519, 1) &&
+          engine_pka_keypair_invalid(kpair, NID_X448, 1))
+    {
+        if (BIO_printf(bp, "%*s<INVALID KEY>\n", indent, "") <= 0)
+            return 0;
+        return 1;
+    }
+
+    if (priv)
+    {
+        nid_data = engine_pka_get_nid_data(kpair->nid);
+        if (BIO_printf(bp, "%*s%s Private-Key:\n", indent, "", nid_data->name)
+              <= 0)
+            return 0;
+        if (BIO_printf(bp, "%*spriv:\n", indent, "") <= 0)
+            return 0;
+        if (ASN1_buf_print(bp, kpair->private_key.buf_ptr,
+                           nid_data->privk_bytes, indent + 4) == 0)
+            return 0;
+    }
+    else
+    {
+        nid_data = engine_pka_get_nid_data(kpair->nid);
+        if (BIO_printf(bp, "%*s%s Public-Key:\n", indent, "", nid_data->name)
+              <= 0)
+            return 0;
+    }
+
+    if (BIO_printf(bp, "%*spub:\n", indent, "") <= 0)
+        return 0;
+
+    if (ASN1_buf_print(bp, kpair->public_key.buf_ptr, nid_data->pubk_bytes,
+                       indent + 4) == 0)
+        return 0;
+    return 1;
+}
+
+static int
+engine_pka_gen_priv_print(BIO *bp, const EVP_PKEY *pkey, int indent, ASN1_PCTX *ctx)
+{
+    return engine_pka_key_print(bp, pkey, indent, ctx, 1);
+}
+
+static int
+engine_pka_gen_pub_print(BIO *bp, const EVP_PKEY *pkey, int indent, ASN1_PCTX *ctx)
+{
+    return engine_pka_key_print(bp, pkey, indent, ctx, 0);
+}
+
+static int engine_pka_pub_cmp(const EVP_PKEY *a, const EVP_PKEY *b)
+{
+    const ENGINE_PKA_KEYPAIR *akey = EVP_PKEY_get0(a);
+    const ENGINE_PKA_KEYPAIR *bkey = EVP_PKEY_get0(b);
+
+    const struct engine_pka_nid_data_st *adata = NULL;
+
+    if (engine_pka_keypair_invalid(akey, akey->nid, 0) ||
+          engine_pka_keypair_invalid(bkey, bkey->nid, 0))
+        return -2;
+    if (akey->nid != bkey->nid)
+        return -2;
+
+    adata = engine_pka_get_nid_data(akey->nid);
+    return !CRYPTO_memcmp(akey->public_key.buf_ptr, bkey->public_key.buf_ptr,
+                          adata->pubk_bytes);
+}
+
+static int engine_pka_curve448_bits(const EVP_PKEY *pkey)
+{
+    return PKA_CURVE448_BITS;
+}
+
+static int engine_pka_curve448_security_bits(const EVP_PKEY *pkey)
+{
+    return PKA_CURVE448_SECURITY_BITS;
+}
+
+static int engine_pka_curve25519_bits(const EVP_PKEY *pkey)
+{
+    return PKA_CURVE25519_BITS;
+}
+
+static int engine_pka_curve25519_security_bits(const EVP_PKEY *pkey)
+{
+    return PKA_CURVE25519_SECURITY_BITS;
+}
+
+static int engine_pka_cmp_parameters(const EVP_PKEY *a, const EVP_PKEY *b)
+{
+    return 1;
+}
+
+static int
+engine_pka_gen_ctrl(int nid, EVP_PKEY *pkey, int op, long arg1, void *arg2)
+{
+    ENGINE_PKA_KEYPAIR *kp = NULL;
+    const unsigned char *p = NULL;
+    const struct engine_pka_nid_data_st *nid_data = engine_pka_get_nid_data(nid);
+    int pklen = 0;
+
+    switch (op)
+    {
+
+#ifndef OPENSSL_V102_COMPAT
+    case ASN1_PKEY_CTRL_SET1_TLS_ENCPT:
+        p = arg2;
+        pklen = arg1;
+
+        if (p == NULL || pklen != nid_data->pubk_bytes )
+        {
+            printf("ERROR: %s: Wrong key length\n", __func__);
+            return 0;
+        }
+
+        kp = engine_pka_keypair_new(nid, PKA_NO_PRIV_KEY, pklen);
+        if (engine_pka_keypair_invalid(kp, nid, 0))
+        {
+            printf("ERROR: %s: Invalid keypair\n", __func__);
+            return 0;
+        }
+
+        memcpy(kp->public_key.buf_ptr, p, pklen);
+
+        EVP_PKEY_assign(pkey, nid, kp);
+        return 1;
+
+
+    case ASN1_PKEY_CTRL_GET1_TLS_ENCPT:
+        kp = EVP_PKEY_get0(pkey);
+        if (!engine_pka_keypair_invalid(kp, nid, 0) && nid == kp->nid)
+        {
+            unsigned char **ppt = arg2;
+            *ppt = OPENSSL_memdup(kp->public_key.buf_ptr, nid_data->pubk_bytes);
+            if (*ppt != NULL)
+                return nid_data->pubk_bytes;
+        }
+        return 0;
+#endif
+    case ASN1_PKEY_CTRL_DEFAULT_MD_NID:
+        *(int *)arg2 = NID_undef;
+        return 2;
+
+    default:
+        return -2;
+
+    }
+}
+
+
+static int
+engine_pka_gen_priv_encode(int nid, PKCS8_PRIV_KEY_INFO *p8,
+                           const EVP_PKEY *pkey)
+{
+    const ENGINE_PKA_KEYPAIR *kp = EVP_PKEY_get0(pkey);
+    ASN1_OCTET_STRING oct;
+    unsigned char *penc = NULL;
+    int penclen;
+    const struct engine_pka_nid_data_st *nid_data;
+    char *tmp_buf = NULL;
+    int ret = 0;
+
+    nid_data = engine_pka_get_nid_data(nid);
+    if (nid_data == NULL)
+    {
+        printf("ERROR: %s: Missing NID data\n", __func__);
+        return 0;
+    }
+
+    if (engine_pka_keypair_invalid(kp, nid, 1) || kp->nid != nid)
+    {
+        printf("ERROR: %s: Invalid private key\n", __func__);
+        return 0;
+    }
+
+    tmp_buf = OPENSSL_secure_malloc(nid_data->privk_bytes);
+    if (NULL == tmp_buf)
+    {
+        printf("ERROR: %s: OpenSSL malloc failed\n", __func__);
+        return 0;
+    }
+
+    oct.data = memcpy(tmp_buf, kp->private_key.buf_ptr, nid_data->privk_bytes);
+    oct.length = nid_data->privk_bytes;
+    oct.flags = 0;
+
+    penclen = i2d_ASN1_OCTET_STRING(&oct, &penc);
+    if (penclen < 0)
+    {
+        printf("ERROR: %s: ASN1 string conversion failed\n", __func__);
+        ret = 0;
+        goto err;
+    }
+
+    if (!PKCS8_pkey_set0(p8, OBJ_nid2obj(nid), 0,
+                         V_ASN1_UNDEF, NULL, penc, penclen))
+    {
+        OPENSSL_clear_free(penc, penclen);
+        printf("ERROR: %s: PKCS8_pkey_set0 failed\n", __func__);
+        ret = 0;
+        goto err;
+    }
+
+    ret = 1;
+err:
+    if (tmp_buf)
+        OPENSSL_secure_free(tmp_buf);
+    return ret;
+}
+
+static int
+engine_pka_gen_priv_decode(int nid, EVP_PKEY *pkey,
+                           RC_CONST PKCS8_PRIV_KEY_INFO *p8)
+{
+    const unsigned char *p;
+    int plen;
+    ASN1_OCTET_STRING *oct = NULL;
+    RC_CONST X509_ALGOR *palg;
+    ENGINE_PKA_KEYPAIR *kp = NULL;
+
+    const struct engine_pka_nid_data_st *nid_data = engine_pka_get_nid_data(nid);
+    if (nid_data == NULL)
+    {
+        printf("ERROR: %s: Missing NID data\n", __func__);
+        return 0;
+    }
+
+    if (!PKCS8_pkey_get0(NULL, &p, &plen, &palg, p8))
+        return 0;
+
+    oct = d2i_ASN1_OCTET_STRING(NULL, &p, plen);
+    if (oct == NULL)
+    {
+        p = NULL;
+        plen = 0;
+    }
+    else
+    {
+        p = ASN1_STRING_get0_data(oct);
+        plen = ASN1_STRING_length(oct);
+    }
+
+    if (palg != NULL)
+    {
+        int ptype;
+
+        /* Algorithm parameters must be absent */
+        X509_ALGOR_get0(NULL, &ptype, NULL, palg);
+        if (ptype != V_ASN1_UNDEF)
+        {
+            printf("ERROR: %s: Invalid encoding\n", __func__);
+            return 0;
+        }
+    }
+
+    if (p == NULL || plen != nid_data->privk_bytes)
+    {
+        printf("ERROR: %s: Wrong key length\n", __func__);
+        return 0;
+    }
+
+    kp = engine_pka_keypair_new(nid, PKA_NO_FLAG, nid_data->privk_bytes);
+    if (engine_pka_keypair_invalid(kp, nid, 1))
+    {
+        printf("ERROR: %s: Invalid private key\n", __func__);
+        return 0;
+    }
+
+    memcpy(kp->private_key.buf_ptr, p, nid_data->privk_bytes);
+
+    ASN1_OCTET_STRING_free(oct);
+    oct = NULL;
+    p = NULL;
+    plen = 0;
+
+    // Generate associated public key
+    if ((nid_data->derive_pubkey)(kp->public_key.buf_ptr, &kp->private_key)
+        != 1)
+    {
+        engine_pka_keypair_free(kp);
+        return 0;
+    }
+
+    EVP_PKEY_assign(pkey, nid, kp);
+
+    return 1;
+}
+
+static int engine_pka_gen_pub_encode(int nid, X509_PUBKEY *pk, const EVP_PKEY *pkey)
+{
+    const ENGINE_PKA_KEYPAIR *kp = EVP_PKEY_get0(pkey);
+    unsigned char *penc;
+    const struct engine_pka_nid_data_st *nid_data;
+
+    nid_data = engine_pka_get_nid_data(nid);
+
+    if (engine_pka_keypair_invalid(kp, nid, 0) || kp->nid != nid)
+    {
+        printf("ERROR: %s: Invalid key pair\n", __func__);
+        return 0;
+    }
+
+    if (nid_data == NULL)
+    {
+        printf("ERROR: %s: Missing nid data\n", __func__);
+        return 0;
+    }
+
+    penc = OPENSSL_memdup(kp->public_key.buf_ptr, nid_data->pubk_bytes);
+    if (penc == NULL)
+    {
+        printf("ERROR: %s: OpenSSL memdup failed\n", __func__);
+        return 0;
+    }
+
+    if (!X509_PUBKEY_set0_param(pk, OBJ_nid2obj(nid), V_ASN1_UNDEF,
+                                NULL, penc, nid_data->pubk_bytes))
+    {
+        OPENSSL_free(penc);
+        printf("ERROR: %s: X509 set PUBKEY failed\n", __func__);
+        return 0;
+    }
+    return 1;
+}
+
+static int engine_pka_gen_pub_decode(int nid, EVP_PKEY *pkey, X509_PUBKEY *pubkey)
+{
+    const unsigned char *p;
+    int pklen;
+    X509_ALGOR *palg;
+    ENGINE_PKA_KEYPAIR *kp = NULL;
+    const struct engine_pka_nid_data_st *nid_data;
+
+    nid_data = engine_pka_get_nid_data(nid);
+
+    if (nid_data == NULL)
+    {
+        printf("ERROR: %s: Missing nid data\n", __func__);
+        return 0;
+    }
+
+    if (!X509_PUBKEY_get0_param(NULL, &p, &pklen, &palg, pubkey))
+        return 0;
+
+    if (palg != NULL)
+    {
+        int ptype;
+
+        /* Algorithm parameters must be absent */
+        X509_ALGOR_get0(NULL, &ptype, NULL, palg);
+        if (ptype != V_ASN1_UNDEF)
+        {
+            printf("ERROR: %s: Invalid encoding\n", __func__);
+            return 0;
+        }
+    }
+
+    if (p == NULL || pklen != nid_data->pubk_bytes)
+    {
+        printf("ERROR: %s: Wrong key length\n", __func__);
+        return 0;
+    }
+
+    kp = engine_pka_keypair_new(nid, PKA_NO_PRIV_KEY, nid_data->pubk_bytes);
+    if (engine_pka_keypair_invalid(kp, nid, 0) )
+    {
+        printf("ERROR: %s: Invalid key\n", __func__);
+        return 0;
+    }
+
+    memcpy(kp->public_key.buf_ptr, p, pklen);
+
+    EVP_PKEY_assign(pkey, nid, kp);
+    return 1;
+}
+
+#define DECLARE_PKA_CONCRETE_FUNCTIONS(___NAME,___NID,___STRING) \
+    static int engine_pka_##___NAME##_ctrl(EVP_PKEY *pkey, int op, long arg1, void *arg2) { return engine_pka_gen_ctrl(___NID,pkey,op,arg1,arg2); }; \
+    static int engine_pka_##___NAME##_priv_encode(PKCS8_PRIV_KEY_INFO *p8, const EVP_PKEY *pkey) { return engine_pka_gen_priv_encode(___NID,p8,pkey); }; \
+    static int engine_pka_##___NAME##_priv_decode(EVP_PKEY *pkey, RC_CONST PKCS8_PRIV_KEY_INFO *p8) { return engine_pka_gen_priv_decode(___NID,pkey,p8); }; \
+    static int engine_pka_##___NAME##_priv_print(BIO *bp, const EVP_PKEY *pkey, int indent, ASN1_PCTX *ctx) { return engine_pka_gen_priv_print(bp,pkey,indent,ctx); }; \
+    static int engine_pka_##___NAME##_pub_encode(X509_PUBKEY *pk, const EVP_PKEY *pkey) { return engine_pka_gen_pub_encode(___NID,pk,pkey); }; \
+    static int engine_pka_##___NAME##_pub_decode(EVP_PKEY *pkey, X509_PUBKEY *pubkey) { return engine_pka_gen_pub_decode(___NID,pkey,pubkey); }; \
+    static int engine_pka_##___NAME##_pub_print(BIO *bp, const EVP_PKEY *pkey, int indent, ASN1_PCTX *ctx) { return engine_pka_gen_pub_print(bp,pkey,indent,ctx); };
+
+DECLARE_PKA_CONCRETE_FUNCTIONS(X25519, NID_X25519, (OBJ_nid2sn(NID_X25519)) );
+DECLARE_PKA_CONCRETE_FUNCTIONS(X448, NID_X448, (OBJ_nid2sn(NID_X448)) );
+
+static int
+engine_pka_register_asn1_meth(int nid, EVP_PKEY_ASN1_METHOD **ameth,
+                       const char *pem_str, const char *info)
+{
+    *ameth = EVP_PKEY_asn1_new(nid, 0, pem_str, info);
+    if (!*ameth)
+        return 0;
+
+    if (nid == NID_X25519)
+    {
+        EVP_PKEY_asn1_set_public(*ameth, engine_pka_X25519_pub_decode,
+                                 engine_pka_X25519_pub_encode, engine_pka_pub_cmp,
+                                 engine_pka_X25519_pub_print, NULL,
+                                 engine_pka_curve25519_bits);
+
+        EVP_PKEY_asn1_set_private(*ameth, engine_pka_X25519_priv_decode,
+                                  engine_pka_X25519_priv_encode, engine_pka_X25519_priv_print);
+
+        EVP_PKEY_asn1_set_ctrl(*ameth, engine_pka_X25519_ctrl);
+
+#ifndef OPENSSL_V102_COMPAT
+        EVP_PKEY_asn1_set_security_bits(*ameth, engine_pka_curve25519_security_bits);
+#endif /* OPENSSL_V102_COMPAT */
+    }
+    else if (nid == NID_X448)
+    {
+        EVP_PKEY_asn1_set_public(*ameth, engine_pka_X448_pub_decode,
+                                 engine_pka_X448_pub_encode, engine_pka_pub_cmp,
+                                 engine_pka_X448_pub_print, NULL,
+                                 engine_pka_curve448_bits);
+
+        EVP_PKEY_asn1_set_private(*ameth, engine_pka_X448_priv_decode,
+                                  engine_pka_X448_priv_encode, engine_pka_X448_priv_print);
+
+        EVP_PKEY_asn1_set_ctrl(*ameth, engine_pka_X448_ctrl);
+
+#ifndef OPENSSL_V102_COMPAT
+        EVP_PKEY_asn1_set_security_bits(*ameth, engine_pka_curve448_security_bits);
+#endif /* OPENSSL_V102_COMPAT */
+    }
+
+    EVP_PKEY_asn1_set_param(*ameth, 0, 0, 0, 0, engine_pka_cmp_parameters, 0);
+    EVP_PKEY_asn1_set_free(*ameth, engine_pka_key_free);
+
+    return 1;
+}
+
+static int
+engine_pka_register_ameth(int id, EVP_PKEY_ASN1_METHOD **ameth, int flags)
+{
+    const char *pem_str = NULL;
+    const char *info = NULL;
+
+    if (!ameth)
+        return 0;
+
+    pem_str = OBJ_nid2sn(id);
+    info = OBJ_nid2ln(id);
+
+    return engine_pka_register_asn1_meth(id, ameth, pem_str, info);
+}
+
+static int engine_pka_register_methods()
+{
+    /* PMETHS */
+    if (!engine_pka_register_pmeth(NID_X25519, &engine_pka_pmeth_X25519, 0))
+        return 0;
+
+    if (!engine_pka_register_pmeth(NID_X448, &engine_pka_pmeth_X448, 0))
+        return 0;
+
+    /* AMETHS */
+    if (!engine_pka_register_ameth(NID_X25519, &engine_pka_ameth_X25519, 0))
+        return 0;
+
+    if (!engine_pka_register_ameth(NID_X448, &engine_pka_ameth_X448, 0))
+        return 0;
+
+    return 1;
+}
+
 /* EC implementation */
 static int
 engine_pka_ecc_pt_add(const EC_GROUP *group, EC_POINT *r, const EC_POINT *a,
