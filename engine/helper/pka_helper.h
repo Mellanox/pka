@@ -40,6 +40,7 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <openssl/crypto.h>
 
 #include "pka.h"
 #include "pka_utils.h"
@@ -69,6 +70,27 @@ extern "C" {
 #define PKA_CMD_DESC_MAX_DATA_SIZE  (1 << 14) // 16K bytes.
 #define PKA_RSLT_DESC_MAX_DATA_SIZE (1 << 12) //  4K bytes.
 
+#define PKA_25519_PUBKEY_SIZE       32
+#define PKA_25519_PRIKEY_SIZE       32
+#define PKA_448_PUBKEY_SIZE         56
+#define PKA_448_PRIKEY_SIZE         56
+
+#define PKA_NO_FLAG       0
+#define PKA_NO_PRIV_KEY   1
+
+#define PKA_CURVE25519_BITS 253
+#define PKA_CURVE25519_SECURITY_BITS 128
+
+#define PKA_CURVE448_BITS 446
+#define PKA_CURVE448_SECURITY_BITS 224
+
+#define sizeof_static_array(x) \
+    ((sizeof((x))) / sizeof((x)[0]))
+
+#define engine_pka_keypair_invalid(kpair, ossl_nid, check_private) \
+    (((kpair) == NULL) || ((kpair)->nid != ossl_nid) || \
+    (check_private && (!(kpair)->has_private)))
+
 // This encapsulates big number information. This structure enables
 // compatibility to OpenSSL
 typedef struct {
@@ -87,6 +109,23 @@ typedef struct {
     bool           valid;
 } pka_engine_info_t;
 
+struct pka_keypair {
+    pka_operand_t private_key;
+    pka_operand_t public_key;
+    int nid;
+    bool has_private;
+};
+
+typedef struct pka_keypair ENGINE_PKA_KEYPAIR;
+
+struct engine_pka_nid_data_st
+{
+    const char *name;
+    size_t privk_bytes;
+    size_t pubk_bytes;
+    int (*derive_pubkey)(unsigned char *buf, pka_operand_t *private_key);
+};
+
 // This function implement all the needed PKA initialization, in order to
 // enable hardware acceleration. This function is not thread-safe.
 int pka_init(void);
@@ -94,6 +133,16 @@ int pka_init(void);
 // This function releases all the PKA resources previously initialized. This
 // function is not thread-safe.
 int pka_finish(void);
+
+// This function allocates the memory resources required to store public and
+// private key pairs of size @size.
+// Note: @flag is currently not useful but is reserved for future when
+// only public key or private key resources need to be allocated.
+ENGINE_PKA_KEYPAIR *engine_pka_keypair_new(int nid, int flag, int size);
+
+// This function releases all the memory resources allocated for
+// public and private key pair.
+int engine_pka_keypair_free(ENGINE_PKA_KEYPAIR *kpair);
 
 // This function implements the modular exponentiation using BlueField
 // PKA hardware.
@@ -145,6 +194,20 @@ int pka_bn_mod_inv(pka_bignum_t *bn_value,
 // PKA hardware.
 int pka_get_random_bytes(uint8_t *buf,
                          int      len);
+
+int pka_mont_25519_mult(unsigned char *buf,
+                        pka_operand_t *point_x,
+                        pka_operand_t *multiplier);
+
+int pka_mont_25519_derive_pubkey(unsigned char *buf,
+                                 pka_operand_t *priv_key);
+
+int pka_mont_448_mult(unsigned char *buf,
+                      pka_operand_t *point_x,
+                      pka_operand_t *multiplier);
+
+int pka_mont_448_derive_pubkey(unsigned char *buf,
+                               pka_operand_t *priv_key);
 
 #ifdef  __cplusplus
 }
