@@ -1674,8 +1674,9 @@ static int pka_dev_config_trng_drbg(pka_dev_res_t *aic_csr_ptr,
 
     // Run TRNG tests after configuring TRNG.
     // NOTE: TRNG need not be enabled to carry out these tests.
-    if (!ret)
-        ret = pka_dev_test_trng(csr_reg_ptr, csr_reg_base);
+    ret = pka_dev_test_trng(csr_reg_ptr, csr_reg_base);
+    if (ret)
+        return ret;
 
     // Start the actual engine by setting the 'enable_trng' and 'drbg_en' bit
     // in the TRNG_CONTROL register (also a nice point to set the interrupt mask
