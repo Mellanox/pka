@@ -11,7 +11,6 @@
 
 #include "pka_test_utils.h"
 
-
 #define MAX_NUM_TESTS   1000
 #define MAX_THREADS     (MAX_CPU_NUMBER - 1)
 
@@ -64,8 +63,14 @@ static const uint32_t DEFAULT_BIT_LEN[] =
     // RSA tests.  These use the rsa_key_system_t.
     [TEST_RSA_MOD_EXP ... TEST_RSA_MOD_EXP_WITH_CRT] = 1024,
 
+    // Montgomery ECDH tests.  These use the mont_ecdh_keys_t.
+    [TEST_MONT_ECDH_MULTIPLY] = 255,
+
     // Ecc tests.  These use the ecc_key_system_t.
     [TEST_ECC_ADD ... TEST_ECC_MULTIPLY] = 256,
+
+    // Montgomery Ecdh tests.  These use the mont_ecdh_keys_t.
+    [TEST_MONT_ECDH ... TEST_MONT_ECDHE] = 255,
 
     // Ecdh tests.  These use the ecdh_key_system_t.
     [TEST_ECDH ... TEST_ECDHE] = 256,
@@ -417,6 +422,49 @@ static pka_status_t submit_rsa_test(pka_handle_t  handle,
     return SUCCESS;
 }
 
+static pka_status_t submit_mont_ecc_test(pka_handle_t  handle,
+                                         user_data_t  *user_data_ptr,
+                                         test_desc_t  *test_desc,
+                                         uint32_t      test_idx)
+{
+    pka_result_code_t  rc;
+    mont_ecdh_keys_t  *ecdh_keys;
+    ecc_mont_curve_t  *curve;
+    test_mont_ecdh_t  *ecdh_test;
+    pka_test_kind_t   *test_kind;
+    pka_test_name_t    test_name;
+    pka_operand_t     *point_x, *multiplier;
+
+    test_kind  = (pka_test_kind_t  *) test_desc->test_kind;
+    ecdh_keys  = (mont_ecdh_keys_t *) test_desc->key_system;
+    ecdh_test  = (test_mont_ecdh_t *) test_desc->test_operands;
+    curve      = ecdh_keys->curve;
+    point_x    = ecdh_test->point_x;
+    multiplier = ecdh_test->multiplier;
+    test_name  = test_kind->test_name;
+
+    if (3 <= verbosity)
+    {
+        printf("\nRunning test_idx=%u test_name=%s\n", test_idx,
+               test_name_to_string(test_name));
+        print_operand("curve->p     = ", &curve->p,  "\n");
+        print_operand("curve->A     = ", &curve->A,  "\n");
+        print_operand("point_x      = ", point_x,    "\n");
+        print_operand("multiplier   = ", multiplier, "\n");
+    }
+
+    PKA_ASSERT(test_name == TEST_MONT_ECDH_MULTIPLY);
+    rc = pka_mont_ecdh_mult(handle, user_data_ptr, curve, point_x, multiplier);
+    if (rc != RC_NO_ERROR)
+    {
+        printf("Bad submit test_name=%s rc=%d\n",
+               test_name_to_string(test_name), rc);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
 static pka_status_t submit_ecc_test(pka_handle_t  handle,
                                     user_data_t  *user_data_ptr,
                                     test_desc_t  *test_desc,
@@ -481,6 +529,103 @@ static pka_status_t submit_ecc_test(pka_handle_t  handle,
     {
         printf("Bad submit test_name=%s rc=%d\n",
                 test_name_to_string(test_name), rc);
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static pka_status_t submit_mont_ecdh_test(pka_handle_t  handle,
+                                          user_data_t  *user_data_ptr,
+                                          test_desc_t  *test_desc,
+                                          uint32_t      test_idx,
+                                          bool          first_submit)
+{
+    pka_result_code_t  rc;
+    mont_ecdh_keys_t  *keys;
+    ecc_mont_curve_t  *curve;
+    pka_test_kind_t   *test_kind;
+    pka_test_name_t    test_name;
+    pka_operand_t     *base_pt_order, *local_private_key;
+    test_mont_ecdh_t  *ecdh_test;
+    pka_operand_t     *base_pt_x, *remote_public_key, *local_public_key;
+
+    test_kind         = (pka_test_kind_t  *) test_desc->test_kind;
+    keys              = (mont_ecdh_keys_t *) test_desc->key_system;
+    ecdh_test         = (test_mont_ecdh_t *) test_desc->test_operands;
+    curve             = keys->curve;
+    base_pt_x         = keys->base_pt_x;
+    base_pt_order     = keys->base_pt_order;
+    remote_public_key = ecdh_test->remote_public_key;
+    test_name         = test_kind->test_name;
+
+    if (3 <= verbosity)
+    {
+        printf("\nRunning test_idx=%u test_name=%s first_submit=%s\n", test_idx,
+               test_name_to_string(test_name), first_submit ? "true" : "false");
+        print_operand("curve->p             = ", &curve->p,         "\n");
+        print_operand("curve->A             = ", &curve->A,         "\n");
+        print_operand("base_pt->x           = ", base_pt_x,         "\n");
+        print_operand("base_pt_order        = ", base_pt_order,     "\n");
+        print_operand("remote_public_key->x = ", remote_public_key, "\n");
+    }
+
+    switch (test_name)
+    {
+    case TEST_MONT_ECDH:
+        local_private_key = ecdh_test->remote_private_key;
+        local_public_key  = ecdh_test->remote_public_key;
+
+        if (3 <= verbosity)
+        {
+            print_operand("local_private_key->x = ", local_private_key, "\n");
+            print_operand("local_public_key->x  = ", local_public_key,  "\n");
+        }
+
+        rc = pka_mont_ecdh(handle, user_data_ptr, curve, remote_public_key,
+                           local_private_key);
+        break;
+
+    case TEST_MONT_ECDHE:
+        if (first_submit)
+        {
+            // Need to create a new "ephemeral" local private key and use that
+            // to calculate and send the corresponding local public key to the
+            // other side.
+            local_private_key = rand_non_zero_integer(handle, base_pt_order);
+            ecdh_test->local_private_key = local_private_key;
+
+            rc = pka_mont_ecdh(handle, user_data_ptr, curve, base_pt_x,
+                               local_private_key);
+        }
+        else
+        {
+            local_private_key = ecdh_test->local_private_key;
+            local_public_key  = ecdh_test->local_public_key;
+
+            if (3 <= verbosity)
+            {
+                print_operand("local_private_key    = ", local_private_key,
+                              "\n");
+                print_operand("local_public_key->x  = ", local_public_key,
+                              "\n");
+            }
+
+            // Now determine the shared secret by multiplying the remote public
+            // key by our newly created local private key.
+            rc = pka_mont_ecdh(handle, user_data_ptr, curve, remote_public_key,
+                               local_private_key);
+        }
+        break;
+
+    default:
+        PKA_ASSERT(false);
+    }
+
+    if (rc != RC_NO_ERROR)
+    {
+        printf("Bad submit test_name=%s rc=%d\n",
+               test_name_to_string(test_name), rc);
         return FAILURE;
     }
 
@@ -851,10 +996,24 @@ static __pka_noinline pka_status_t submit_pka_test(pka_handle_t  handle,
         status = submit_rsa_test(handle, user_data_ptr, test_desc, test_idx);
         break;
 
+    case TEST_MONT_ECDH_MULTIPLY:
+        status = submit_mont_ecc_test(handle, user_data_ptr, test_desc,
+                                      test_idx);
+        break;
+
     case TEST_ECC_ADD:
     case TEST_ECC_DOUBLE:
     case TEST_ECC_MULTIPLY:
         status = submit_ecc_test(handle, user_data_ptr, test_desc, test_idx);
+        break;
+
+    case TEST_MONT_ECDH:
+    case TEST_MONT_ECDHE:
+        if (test_name == TEST_MONT_ECDHE)
+            user_data_ptr->multi_submit = true;
+
+        status = submit_mont_ecdh_test(handle, user_data_ptr, test_desc,
+                                       test_idx, first_submit);
         break;
 
     case TEST_ECDH:
@@ -998,6 +1157,30 @@ static pka_status_t chk_rsa_test_results(test_desc_t   *test_desc,
         return FAILURE;
 }
 
+static pka_status_t chk_mont_ecc_test_results(pka_handle_t   handle,
+                                              test_desc_t   *test_desc,
+                                              pka_results_t *results)
+{
+    test_mont_ecdh_t *ecdh_test;
+    pka_operand_t    *answer_pt_x, *result_pt_x;
+
+    PKA_ASSERT(results->result_cnt == 1);
+    result_pt_x  = &results->results[0];
+    ecdh_test    = (test_mont_ecdh_t *) test_desc->test_operands;
+    answer_pt_x  = ecdh_test->answer;
+
+    if (3 <= verbosity)
+    {
+        print_operand("result_pt_x = ", result_pt_x, "\n");
+        print_operand("answer_pt_x = ", answer_pt_x, "\n");
+    }
+
+    if (pki_compare(result_pt_x, answer_pt_x) == RC_COMPARE_EQUAL)
+        return SUCCESS;
+    else
+        return FAILURE;
+}
+
 static pka_status_t chk_ecc_test_results(pka_handle_t   handle,
                                          test_desc_t   *test_desc,
                                          pka_results_t *results)
@@ -1027,6 +1210,56 @@ static pka_status_t chk_ecc_test_results(pka_handle_t   handle,
         return SUCCESS;
     else
         return FAILURE;
+}
+
+static pka_status_t chk_mont_ecdh_test_results(pka_handle_t   handle,
+                                               test_desc_t   *test_desc,
+                                               pka_results_t *results)
+{
+    mont_ecdh_keys_t *ecdh_keys;
+    test_mont_ecdh_t *ecdh_test;
+    pka_test_kind_t  *test_kind;
+    pka_test_name_t   test_name;
+    pka_operand_t    *answer_pt_x, *result_pt_x;
+    pka_status_t      status;
+
+    test_kind  = (pka_test_kind_t   *) test_desc->test_kind;
+    ecdh_keys  = (mont_ecdh_keys_t  *) test_desc->key_system;
+    ecdh_test  = (test_mont_ecdh_t  *) test_desc->test_operands;
+    test_name  = test_kind->test_name;
+
+    PKA_ASSERT((test_name == TEST_MONT_ECDH) || (test_name == TEST_MONT_ECDHE));
+    PKA_ASSERT(results->result_cnt == 1);
+
+    result_pt_x  = &results->results[0];
+    if (test_name == TEST_MONT_ECDH)
+        answer_pt_x = ecdh_test->answer;
+    else
+        answer_pt_x = sw_mont_ecdh_multiply(handle, ecdh_keys->curve,
+                                            ecdh_test->local_public_key,
+                                            ecdh_test->remote_private_key);
+
+    PKA_ASSERT(answer_pt_x != NULL);
+    if (3 <= verbosity)
+    {
+        print_operand("result_pt_x = ", result_pt_x, "\n");
+        print_operand("answer_pt_x = ", answer_pt_x, "\n");
+    }
+
+    if (pki_compare(result_pt_x, answer_pt_x) == RC_COMPARE_EQUAL)
+        status = SUCCESS;
+    else
+        status = FAILURE;
+
+    if (3 <= verbosity)
+    {
+        if (status == SUCCESS)
+            printf("run_mont_ecdh_test SUCCESS\n");
+        else
+            printf("run_ecdh_test FAILURE\n");
+    }
+
+    return status;
 }
 
 static pka_status_t chk_ecdh_test_results(pka_handle_t   handle,
@@ -1237,10 +1470,17 @@ chk_test_results(pka_handle_t     handle,
     case TEST_RSA_MOD_EXP_WITH_CRT:
         return chk_rsa_test_results(test_desc, results);
 
+    case TEST_MONT_ECDH_MULTIPLY:
+        return chk_mont_ecc_test_results(handle, test_desc, results);
+
     case TEST_ECC_ADD:
     case TEST_ECC_DOUBLE:
     case TEST_ECC_MULTIPLY:
         return chk_ecc_test_results(handle, test_desc, results);
+
+    case TEST_MONT_ECDH:
+    case TEST_MONT_ECDHE:
+        return chk_mont_ecdh_test_results(handle, test_desc, results);
 
     case TEST_ECDH:
     case TEST_ECDHE:
@@ -1266,17 +1506,25 @@ static void store_first_submit_results(test_desc_t    *test_desc,
                                        pka_test_name_t test_name,
                                        pka_results_t  *results)
 {
-    dsa_signature_t *signature;
-    pka_operand_t   *x_ptr, *y_ptr, *r, *s;
-    test_ecdsa_t    *ecdsa_test;
-    ecc_point_t     *result_pt;
-    test_ecdh_t     *ecdh_test;
-    test_dsa_t      *dsa_test;
-    uint32_t         r_buf_len, s_buf_len;
-    uint8_t         *r_buf_ptr, *s_buf_ptr;
+    dsa_signature_t  *signature;
+    pka_operand_t    *x_ptr, *y_ptr, *r, *s;
+    test_ecdsa_t     *ecdsa_test;
+    ecc_point_t      *result_pt;
+    test_ecdh_t      *ecdh_test;
+    test_mont_ecdh_t *mont_ecdh_test;
+    test_dsa_t       *dsa_test;
+    uint32_t          r_buf_len, s_buf_len;
+    uint8_t          *r_buf_ptr, *s_buf_ptr;
 
     switch (test_name)
     {
+    case TEST_MONT_ECDHE:
+        x_ptr = dup_operand(&results->results[0]);
+
+        mont_ecdh_test = (test_mont_ecdh_t *) test_desc->test_operands;
+        mont_ecdh_test->local_public_key = x_ptr;
+        break;
+
     case TEST_ECDHE:
         result_pt    = calloc(1, sizeof(ecc_point_t));
         x_ptr        = dup_operand(&results->results[0]);
@@ -1870,7 +2118,8 @@ static void print_usage(char *progname)
     printf("     ADD, SUBTRACT, MULTIPLY, DIVIDE, DIV_MOD, MODULO\n");
     printf("     SHIFT_LEFT, SHIFT_RIGHT, MOD_INVERT\n");
     printf("     MOD_EXP, RSA_MOD_EXP, RSA_VERIFY, RSA_MOD_EXP_WITH_CRT\n");
-    printf("     ECC_ADD, ECC_DOUBLE, ECC_MULTIPLY, ECDH, ECDHE,\n");
+    printf("     MONT_ECDH_MULTIPLY, ECC_ADD, ECC_DOUBLE, ECC_MULTIPLY\n");
+    printf("     MONT_ECDH, MONT_ECDHE, ECDH, ECDHE,\n");
     printf("     ECDSA_GEN, ECDSA_VERIFY, ECDSA_GEN_VERIFY\n");
     printf("     DSA_GEN, DSA_VERIFY, DSA_GEN_VERIFY\n\n");
     printf("The default command line options (except for -b and -s) are:\n");
@@ -1878,10 +2127,11 @@ static void print_usage(char *progname)
     printf("The defaults for '-b' and '-s' depend upon the test name (as \n");
     printf("given by '-c') as follows:\n");
     printf("a) the default for '-b' is 1024 for all tests except\n");
-    printf("   for the ECC_* tests, ECDH* and ECDSA_* tests when it is 256.\n");
+    printf("   for the ECC_* tests, ECDH* and ECDSA_* tests when it is 256,\n");
+    printf("   and for the MONT_* tests when it is 255.\n");
     printf("b) the default for -s is 17 for RSA_VERIFY, 'bit_len - 1'\n");
     printf("   for DIVIDE, DIV_MOD, MODULO, and DSA_* tests\n");
-    printf("   for for all other tests.\n\n");
+    printf("   and unused for for all other tests.\n\n");
 }
 
 static pka_status_t process_options(int argc, char *argv[])

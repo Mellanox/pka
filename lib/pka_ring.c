@@ -640,6 +640,44 @@ static void pka_ring_write_operand(pka_ring_alloc_t *alloc,
     PKA_ASSERT(alloc->dst_offset <= alloc->max_dst_offset);
 }
 
+static int pka_adjust_mont_ecdh_multiplier(pka_operand_t *dst_operand,
+                                           pka_operand_t *src_operand,
+                                           pka_operand_t *curve_p)
+{
+    uint32_t prime_byte_len, src_byte_len, msb_byte_idx;
+
+    // Two different cases: Curve25519 and Cureve448.  Distinguish these cases
+    // by looking at the length of the curve prime
+    prime_byte_len = curve_p->actual_len;
+    src_byte_len   = src_operand->actual_len;
+    memset(dst_operand->buf_ptr, 0, dst_operand->buf_len);
+    memcpy(dst_operand->buf_ptr, src_operand->buf_ptr, src_byte_len);
+    if (prime_byte_len == 32)
+    {
+        // For curve25519, clear the three least significant bit (bits 0, 1
+        // and 2), clear the most significant bit (bit 255), and set the next
+        // most significant bit (bit 254).
+        PKA_ASSERT(32 <= dst_operand->buf_len);
+        msb_byte_idx                        = 31;
+        dst_operand->buf_ptr[0]            &= 0xF8;
+        dst_operand->buf_ptr[msb_byte_idx] &= 0x7F;
+        dst_operand->buf_ptr[msb_byte_idx] |= 0x40;
+        dst_operand->actual_len             = 32;
+    }
+    else if (prime_byte_len == 56)
+    {
+        // For curve448, clear the two least significant bit (bits 0 and 1),
+        // and set the most significant bit (bit 487) to 1.
+        PKA_ASSERT(56 <= dst_operand->buf_len);
+        msb_byte_idx                        = 55;
+        dst_operand->buf_ptr[0]            &= 0xFC;
+        dst_operand->buf_ptr[msb_byte_idx] |= 0x80;
+        dst_operand->actual_len             = 56;
+    }
+
+    return 0;
+}
+
 // Copy the input vector associated with a command descriptor into ring memory.
 static uint16_t pka_ring_copy_operand(pka_ring_alloc_t *alloc,
                                       pka_operand_t    *operand,
@@ -746,7 +784,9 @@ int pka_ring_set_cmd_desc(pka_ring_hw_cmd_desc_t *cmd,
                           uint32_t                shift_cnt,
                           pka_operand_t           operands[])
 {
-    uint32_t lenA, lenB, result_len;
+    pka_operand_t multiplier;
+    uint32_t      lenA, lenB, pad_len, result_len;
+    uint8_t       mult_buf[MAX_ECC_BUF];
 
     cmd->command    = opcode;
     cmd->odd_powers = shift_cnt;
@@ -909,6 +949,30 @@ int pka_ring_set_cmd_desc(pka_ring_hw_cmd_desc_t *cmd,
         cmd->length_b  = lenB;
         cmd->pointer_a = pka_ring_copy_operand(alloc, &operands[0], lenA, 0);
         cmd->pointer_b = pka_ring_copy_operand(alloc, &operands[1], lenB, 0);
+        cmd->pointer_d = pka_ring_result_ptr(alloc, lenB);
+        break;
+
+    case CC_MONT_ECDH_MULTIPLY:
+        // operands[0] is multiplier,    operands[1] is point x,
+        // operands[2] is curve prime p, operands[3] is curve param A
+        PKA_ASSERT(operand_cnt == 4);
+        lenA    = pka_ring_operand_wlen(&operands[0], MAX_ECC_VEC_SZ);
+        lenB    = pka_ring_operand_wlen(&operands[2], MAX_ECC_VEC_SZ);
+        pad_len = (lenB & 0x1) ? 3: 2;
+
+        memcpy(&multiplier, &operands[0], sizeof(multiplier));
+        multiplier.buf_len = MAX_ECC_BUF;
+        multiplier.buf_ptr = &mult_buf[0];
+        pka_adjust_mont_ecdh_multiplier(&multiplier, &operands[0],
+                                        &operands[2]);
+
+        cmd->length_a  = lenA;
+        cmd->length_b  = lenB;
+        cmd->pointer_a = pka_ring_copy_operand(alloc, &multiplier, lenA, 0);
+        cmd->pointer_b = pka_ring_concat(alloc, &operands[2], &operands[3],
+                                         lenB, 3, 2, 0);
+        cmd->pointer_c = pka_ring_copy_operand(alloc, &operands[1], lenB,
+                                               pad_len);
         cmd->pointer_d = pka_ring_result_ptr(alloc, lenB);
         break;
 
@@ -1200,6 +1264,7 @@ uint32_t pka_ring_get_result(pka_ring_info_t         *ring,
     case CC_MODULAR_EXP:
     case CC_MOD_EXP_CRT:
     case CC_MODULAR_INVERT:
+    case CC_MONT_ECDH_MULTIPLY:
         // Returns a single result using pointer_d.
         index = pka_ring_copy_result(ring, queue_ptr, result1_offset,
                     result_desc->pointer_d, result1_size, queue_size);
@@ -1331,6 +1396,7 @@ uint32_t pka_ring_results_len(pka_ring_hw_rslt_desc_t *result_desc,
     case CC_MODULAR_EXP:
     case CC_MOD_EXP_CRT:
     case CC_MODULAR_INVERT:
+    case CC_MONT_ECDH_MULTIPLY:
         // Returns a single result.
         *result1_len = rslt_byte_len;
 

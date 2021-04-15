@@ -66,7 +66,8 @@ typedef enum
     PKA_RESULT_BUF_NULL         = -1516,  ///< result buf ptr is NULL
     PKA_RESULT_BUF_TOO_SMALL    = -1517,  ///< result buf_len too small
     PKA_BAD_RESULT_IDX          = -1518,  ///< bad rsult_idx
-    PKA_RESULT_FIFO_EMPTY       = -1519   ///< result fifo empty
+    PKA_RESULT_FIFO_EMPTY       = -1519,  ///< result fifo empty
+    PKA_CURVE_TYPE_INVALID      = -1520   ///< Invalid curve type
 } pka_ret_code_t;
 
 /// The pka_comparison_t enumeration is the result type for internal comparison.

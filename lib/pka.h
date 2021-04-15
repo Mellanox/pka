@@ -316,6 +316,8 @@ typedef enum
     CC_MOD_EXP_CRT           = 0x11,
     /// Modular Inversion (complex arithmetic).
     CC_MODULAR_INVERT        = 0x12,
+    /// ECC point multiplication on Montgomery Curves (complex arithmetic)
+    CC_MONT_ECDH_MULTIPLY    = 0x13,
     /// ECC point addition/doubling (complex arithmetic).
     CC_ECC_PT_ADD            = 0x14,
     /// ECC point multiplication (complex arithmetic).
@@ -789,6 +791,72 @@ typedef struct
     pka_operand_t b;  ///< constant coefficient in defining equation
 } ecc_curve_t;
 
+typedef enum
+{
+    PKA_CURVE_NULL = 0,
+    PKA_CURVE_25519,
+    PKA_CURVE_448
+}pka_mont_curve_t;
+
+/// The ecc_mont_curve_t record type is used to represent an elliptic
+/// curve in Montgomery form.
+///
+/// It holds all of the parameters defining an elliptic curve over a large
+/// prime number finite field. The prime used as the modulus is called 'p'.
+/// The parameter of the general curve is called 'A'. The formula defining
+/// the curve is:
+/// @code
+/// // The curve is defined as all possible (u,v) values such that
+/// // u,v are integers in the range 0..p-1 (where p must be an odd prime).
+/// // and the u,v values also satisfy:
+///   v^2 mod p = (u^3 + A*u^2 + u) mod p
+///
+/// Note that a more general equation for Montgomery curves is
+///   B*v*2 mod p = (u^3 + A*u^2 + u) mod p
+/// but for our purposes B will always be 1.
+/// @endcode
+typedef struct
+{
+    pka_operand_t    p;    ///< large integer prime defining the finite field
+    pka_operand_t    A;    ///< coefficient of u^2 in the defining equation
+    pka_mont_curve_t type; ///< type to depict curve.
+} ecc_mont_curve_t;
+
+/// Montgomery Elliptic Curve Cryptography (ECC) point multiplication.
+///
+/// Implements modular elliptic curve multiplication for points on a Montgomery
+/// curve like Curve25519 and Curve448. In particular, given a point on a
+/// Montgomery elliptic curve and a 'scalar' m, multiply the point by the
+/// scalar giving a new result point. Scalar multiplication is defined to be
+/// equivalent to repeated elliptic curve addition.  Note that this specific
+/// function is ONLY given the x-coordinate of the point, and ONLY returns the
+/// x-coordinate of the result point!
+///
+/// @note: The curve parameter passed in currently MUST be one of curve25519 or
+///        curve448!
+/// @note: The multiplier is subsequently modified according to RFC7748.
+///        For curve25519 the two MSB bits are set to "0b01" and the three LSB
+///        bits are cleared. For curve448 the MSB bit is set and the two LSB
+///        bits are cleared.  This is done internally and does not change the
+///        value the user passed in.
+/// @note Elliptic curves using a modulus of 2^m are NOT supported.
+///
+/// @param handle     An initialized PKA handle to use for this command.
+/// @param user_data  Opaque user pointer that is returned with the result.
+/// @param curve      A pointer to an ecc_mont_curve_t object, which
+///                   supplies the curve parameters A and p where p must be
+///                   prime.
+/// @param point_x    A pointer to the x coordinate of an ecc_point_t object.
+/// @param multiplier A big integer indicating the number of times that point_x
+///                   should be added to itself.
+///
+/// @return           0 on success, a negative error code on failure.
+int pka_mont_ecdh_mult(pka_handle_t      handle,
+                       void*             user_data,
+                       ecc_mont_curve_t* curve,
+                       pka_operand_t*    point_x,
+                       pka_operand_t*    multiplier);
+
 /// Elliptic Curve Cryptography (ECC) point addition.
 ///
 /// Implements modular elliptic curve addition. In particular, given two points
@@ -874,6 +942,35 @@ int pka_ecc_pt_mult(pka_handle_t   handle,
                     ecc_curve_t*   curve,
                     ecc_point_t*   pointA,
                     pka_operand_t* multiplier);
+
+/// Elliptic Curve Diffie-Hellman (ECDH) on Montgomery curves.
+///
+/// ECDH is based on ECC point multiplication and essentially uses the
+/// API of the same.
+///
+/// @note: The curve parameter passed in currently MUST be one of curve25519 or
+///        curve448!
+/// @note Elliptic curves using a modulus of 2^m are NOT supported.
+///
+/// @param handle      An initialized PKA handle to use for this command.
+/// @param user_data   Opaque user pointer that is returned with the result.
+/// @param curve       A pointer to an ecc_mont_curve_t object, which supplies
+///                    the curve parameters A and p where p must be prime.
+///                    MUST be a pointer to either the curve25519 or the
+///                    curve448 object.
+/// @param point_x     The x coordinate of a point on a Montgomery ECC curve.
+///                    This is either a base point for the curve or a remote
+///                    public key.
+/// @param private_key big integer indicating the number of times that point
+///                    should be added to itself. In case of ECDH this the local
+///                    private key.
+///
+/// @return            0 on success, a negative error code on failure.
+int pka_mont_ecdh(pka_handle_t      handle,
+                  void*             user_data,
+                  ecc_mont_curve_t* curve,
+                  pka_operand_t*    point_x,
+                  pka_operand_t*    private_key);
 
 /// Elliptic Curve Diffie-Hellman (ECDH).
 ///

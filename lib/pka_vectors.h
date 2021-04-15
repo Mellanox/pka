@@ -43,10 +43,10 @@
 #include "pka.h"
 #include "pka_types.h"
 
-// EIP-154 maximum operand lengths in 4-byte words:
-#define MAX_GEN_VEC_SZ         258
-#define MAX_MODEXP_CRT_VEC_SZ  130
-#define MAX_ECC_VEC_SZ          24
+// EIP-154 maximum operand lengths in bytes:
+#define MAX_GEN_VEC_SZ         (258 * 4)
+#define MAX_MODEXP_CRT_VEC_SZ  (130 * 4)
+#define MAX_ECC_VEC_SZ         ( 24 * 4)
 
 // The following maximum lengths are deliberately a little larger than the
 // actual HW limits above so as to allow for algorithms that might have

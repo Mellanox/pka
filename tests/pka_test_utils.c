@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "pka_ring.h"
 #include "pka_test_utils.h"
 
 static uint8_t RSA_VERIFY_EXPON[] = { 0x01, 0x00, 0x01 };
@@ -354,11 +355,46 @@ static uint8_t P384_s_buf[] =
     0x68, 0xEB, 0xBE, 0x80, 0x37, 0x94, 0xA4, 0x02
 };
 
-#if 0
-//static char Curve448_p_string[] = 2^448 - 2^224 - 1
-//    "ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff"
-//    "ffffffff fffffffe ffffffff 00000000 00000000 ffffffff";
-static uint8_t Curve448_p_buf[] =
+// 2^255 - 19 in big-endian
+static uint8_t curve25519_p_buf[] =
+{
+    0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xED
+};
+
+// 486662 in big-endian
+static uint8_t curve25519_A_buf[] =
+{
+    0x07, 0x6D, 0x06
+};
+
+// In big endian order
+uint8_t Curve255_bp_u_buf[] =
+{
+    0x09
+};
+
+// In big endian order
+uint8_t Curve255_bp_v_buf[] =
+{
+    0x20, 0xAE, 0x19, 0xA1, 0xB8, 0xA0, 0x86, 0xB4,
+    0xE0, 0x1E, 0xDD, 0x2C, 0x77, 0x48, 0xD1, 0x4C,
+    0x92, 0x3D, 0x4D, 0x7E, 0x6D, 0x7C, 0x61, 0xB2,
+    0x29, 0xE9, 0xC5, 0xA2, 0x7E, 0xCE, 0xD3, 0xD9
+};
+
+// In big endian order
+uint8_t Curve255_bp_order_buf[] =
+{
+    0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x14, 0xDE, 0xF9, 0xDE, 0xA2, 0xF7, 0x9C, 0xD6,
+    0x58, 0x12, 0x63, 0x1A, 0x5C, 0xF5, 0xD3, 0xED
+};
+
+static uint8_t curve448_p_buf[] =
 {
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -369,175 +405,38 @@ static uint8_t Curve448_p_buf[] =
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
 
-//static char Curve448_a_string[] =
-//    "ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff"
-//    "ffffffff fffffffe ffffffff 00000000 00000000 fffffffc";
-
-static uint8_t Curve448_a_buf[] =
+// 156326 in big-endian
+static uint8_t curve448_A_buf[] =
 {
+    0x02, 0x62, 0xA6
+};
+
+uint8_t Curve448_bp_u_buf[] =
+{
+    0x05
+};
+
+uint8_t Curve448_bp_v_buf[] =
+{
+    0x7D, 0x23, 0x5D, 0x12, 0x95, 0xF5, 0xB1, 0xF6,
+    0x6C, 0x98, 0xAB, 0x6E, 0x58, 0x32, 0x6F, 0xCE,
+    0xCB, 0xAE, 0x5D, 0x34, 0xF5, 0x55, 0x45, 0xD0,
+    0x60, 0xF7, 0x5D, 0xC2, 0x8D, 0xF3, 0xF6, 0xED,
+    0xB8 ,0x02, 0x7E, 0x23, 0x46, 0x43, 0x0D, 0x21,
+    0x13, 0x12, 0xC4, 0xB1, 0x50, 0x67, 0x7A, 0xF7,
+    0x6F, 0xD7, 0x22, 0x3D, 0x45, 0x7B, 0x5B, 0x1A
+};
+
+uint8_t Curve448_bp_order_buf[] =
+{
+    0x3F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE,
-    0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFC
+    0xFF, 0xFF, 0xFF, 0xFF, 0x7C, 0xCA, 0x23, 0xE9,
+    0xC4, 0x4E, 0xDB, 0x49, 0xAE, 0xD6, 0x36, 0x90,
+    0x21, 0x6C, 0xC2, 0x72, 0x8D, 0xC5, 0x8F, 0x55,
+    0x23, 0x78, 0xC2, 0x92, 0xAB, 0x58, 0x44, 0xF3
 };
-
-//static char Curve448_b_string[] =
-//    "b3312fa7 e23ee7e4 988e056b e3f82d19 181d9c6e fe814112"
-//    "0314088f 5013875a c656398d 8a2ed19d 2a85c8ed d3ec2aef";
-
-static uint8_t Curve448_b_buf[] =
-{
-    0xB3, 0x31, 0x2F, 0xA7, 0xE2, 0x3E, 0xE7, 0xE4,
-    0x98, 0x8E, 0x05, 0x6B, 0xE3, 0xF8, 0x2D, 0x19,
-    0x18, 0x1D, 0x9C, 0x6E, 0xFE, 0x81, 0x41, 0x12,
-    0x03, 0x14, 0x08, 0x8F, 0x50, 0x13, 0x87, 0x5A,
-    0xC6, 0x56, 0x39, 0x8D, 0x8A, 0x2E, 0xD1, 0x9D,
-    0x2A, 0x85, 0xC8, 0xED, 0xD3, 0xEC, 0x2A, 0xEF
-};
-
-//static char Curve448_xg_string[] =
-//    "aa87ca22 be8b0537 8eb1c71e f320ad74 6e1d3b62 8ba79b98"
-//    "59f741e0 82542a38 5502f25d bf55296c 3a545e38 72760ab7";
-
-static uint8_t Curve448_xg_buf[] =
-{
-    0xaa, 0x87, 0xca, 0x22, 0xbe, 0x8b, 0x05, 0x37,
-    0x8e, 0xb1, 0xc7, 0x1e, 0xf3, 0x20, 0xad, 0x74,
-    0x6e, 0x1d, 0x3b, 0x62, 0x8b, 0xa7, 0x9b, 0x98,
-    0x59, 0xf7, 0x41, 0xe0, 0x82, 0x54, 0x2a, 0x38,
-    0x55, 0x02, 0xf2, 0x5d, 0xbf, 0x55, 0x29, 0x6c,
-    0x3a, 0x54, 0x5e, 0x38, 0x72, 0x76, 0x0a, 0xb7
-};
-
-//static char Curve448_yg_string[] =
-//    "3617de4a 96262c6f 5d9e98bf 9292dc29 f8f41dbd 289a147c"
-//    "e9da3113 b5f0b8c0 0a60b1ce 1d7e819d 7a431d7c 90ea0e5f";
-
-static uint8_t Curve448_yg_buf[] =
-{
-    0x36, 0x17, 0xde, 0x4a, 0x96, 0x26, 0x2c, 0x6f,
-    0x5d, 0x9e, 0x98, 0xbf, 0x92, 0x92, 0xdc, 0x29,
-    0xf8, 0xf4, 0x1d, 0xbd, 0x28, 0x9a, 0x14, 0x7c,
-    0xe9, 0xda, 0x31, 0x13, 0xb5, 0xf0, 0xb8, 0xc0,
-    0x0a, 0x60, 0xb1, 0xce, 0x1d, 0x7e, 0x81, 0x9d,
-    0x7a, 0x43, 0x1d, 0x7c, 0x90, 0xea, 0x0e, 0x5f
-};
-
-//static char Curve448_n_string[] =
-//    "ffffffff ffffffff ffffffff ffffffff ffffffff ffffffff"
-//    "c7634d81 f4372ddf 581a0db2 48b0a77a ecec196a ccc52973";
-
-// Base_pt_order:
-static uint8_t Curve448_n_buf[] =
-{
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xc7, 0x63, 0x4d, 0x81, 0xf4, 0x37, 0x2d, 0xdf,
-    0x58, 0x1a, 0x0d, 0xb2, 0x48, 0xb0, 0xa7, 0x7a,
-    0xec, 0xec, 0x19, 0x6a, 0xcc, 0xc5, 0x29, 0x73
-};
-
-//static char Curve448_d_string[] =
-//    "c838b852 53ef8dc7 394fa580 8a518398 1c7deef5 a69ba8f4"
-//    "f2117ffe a39cfcd9 0e95f6cb c854abac ab701d50 c1f3cf24";
-
-static uint8_t Curve448_d_buf[] =
-{
-    0xc8, 0x38, 0xb8, 0x52, 0x53, 0xef, 0x8d, 0xc7,
-    0x39, 0x4f, 0xa5, 0x80, 0x8a, 0x51, 0x83, 0x98,
-    0x1c, 0x7d, 0xee, 0xf5, 0xa6, 0x9b, 0xa8, 0xf4,
-    0xf2, 0x11, 0x7f, 0xfe, 0xa3, 0x9c, 0xfc, 0xd9,
-    0x0e, 0x95, 0xf6, 0xcb, 0xc8, 0x54, 0xab, 0xac,
-    0xab, 0x70, 0x1d, 0x50, 0xc1, 0xf3, 0xcf, 0x24
-};
-
-//static char Curve448_xq_string[] =
-//    "1fbac8ee bd0cbf35 640b39ef e0808dd7 74debff2 0a2a329e"
-//    "91713baf 7d7f3c3e 81546d88 3730bee7 e48678f8 57b02ca0";
-
-static uint8_t Curve448_xq_buf[] =
-{
-    0x1f, 0xba, 0xc8, 0xee, 0xbd, 0x0c, 0xbf, 0x35,
-    0x64, 0x0b, 0x39, 0xef, 0xe0, 0x80, 0x8d, 0xd7,
-    0x74, 0xde, 0xbf, 0xf2, 0x0a, 0x2a, 0x32, 0x9e,
-    0x91, 0x71, 0x3b, 0xaf, 0x7d, 0x7f, 0x3c, 0x3e,
-    0x81, 0x54, 0x6d, 0x88, 0x37, 0x30, 0xbe, 0xe7,
-    0xe4, 0x86, 0x78, 0xf8, 0x57, 0xb0, 0x2c, 0xa0
-};
-
-//static char Curve448_yq_string[] =
-//    "eb213103 bd68ce34 3365a8a4 c3d4555f a385f533 0203bdd7"
-//    "6ffad1f3 affb9575 1c132007 e1b24035 3cb0a4cf 1693bdf9";
-
-static uint8_t Curve448_yq_buf[] =
-{
-    0xeb, 0x21, 0x31, 0x03, 0xbd, 0x68, 0xce, 0x34,
-    0x33, 0x65, 0xa8, 0xa4, 0xc3, 0xd4, 0x55, 0x5f,
-    0xa3, 0x85, 0xf5, 0x33, 0x02, 0x03, 0xbd, 0xd7,
-    0x6f, 0xfa, 0xd1, 0xf3, 0xaf, 0xfb, 0x95, 0x75,
-    0x1c, 0x13, 0x20, 0x07, 0xe1, 0xb2, 0x40, 0x35,
-    0x3c, 0xb0, 0xa4, 0xcf, 0x16, 0x93, 0xbd, 0xf9
-};
-
-//static char Curve448_k_string[] =
-//    "dc6b4403 6989a196 e39d1cda c000812f 4bdd8b2d b41bb33a"
-//    "f5137258 5ebd1db6 3f0ce827 5aa1fd45 e2d2a735 f8749359";
-
-static uint8_t Curve448_k_buf[] =
-{
-    0xdc, 0x6b, 0x44, 0x03, 0x69, 0x89, 0xa1, 0x96,
-    0xe3, 0x9d, 0x1c, 0xda, 0xc0, 0x00, 0x81, 0x2f,
-    0x4b, 0xdd, 0x8b, 0x2d, 0xb4, 0x1b, 0xb3, 0x3a,
-    0xf5, 0x13, 0x72, 0x58, 0x5e, 0xbd, 0x1d, 0xb6,
-    0x3f, 0x0c, 0xe8, 0x27, 0x5a, 0xa1, 0xfd, 0x45,
-    0xe2, 0xd2, 0xa7, 0x35, 0xf8, 0x74, 0x93, 0x59
-};
-
-//static char Curve448_kinv_string[] =
-//    "7436f030 88e65c37 ba8e7b33 887fbc87 757514d6 11f7d1fb"
-//    "df6d2104 a297ad31 8cdbf740 4e4ba37e 599666df 37b8d8be";
-
-static uint8_t Curve448_kinv_buf[] =
-{
-    0x74, 0x36, 0xf0, 0x30, 0x88, 0xe6, 0x5c, 0x37,
-    0xba, 0x8e, 0x7b, 0x33, 0x88, 0x7f, 0xbc, 0x87,
-    0x75, 0x75, 0x14, 0xd6, 0x11, 0xf7, 0xd1, 0xfb,
-    0xdf, 0x6d, 0x21, 0x04, 0xa2, 0x97, 0xad, 0x31,
-    0x8c, 0xdb, 0xf7, 0x40, 0x4e, 0x4b, 0xa3, 0x7e,
-    0x59, 0x96, 0x66, 0xdf, 0x37, 0xb8, 0xd8, 0xbe
-};
-
-//static char Curve448_hash_string[] =
-//    "b9210c9d 7e20897a b8659726 6a9d5077 e8db1b06 f7220ed6"
-//    "ee75bd8b 45db3789 1f8ba555 03040041 59f4453d c5b3f5a1";
-
-static uint8_t Curve448_hash_buf[] =
-{
-    0xb9, 0x21, 0x0c, 0x9d, 0x7e, 0x20, 0x89, 0x7a,
-    0xb8, 0x65, 0x97, 0x26, 0x6a, 0x9d, 0x50, 0x77,
-    0xe8, 0xdb, 0x1b, 0x06, 0xf7, 0x22, 0x0e, 0xd6,
-    0xee, 0x75, 0xbd, 0x8b, 0x45, 0xdb, 0x37, 0x89,
-    0x1f, 0x8b, 0xa5, 0x55, 0x03, 0x04, 0x00, 0x41,
-    0x59, 0xf4, 0x45, 0x3d, 0xc5, 0xb3, 0xf5, 0xa1
-};
-
-//static char Curve448_s_string[] =
-//    "20ab3f45 b74f10b6 e11f96a2 c8eb694d 206b9dda 86d3c7e3"
-//    "31c26b22 c987b753 77265776 67adadf1 68ebbe80 3794a402";
-
-static uint8_t Curve448_s_buf[] =
-{
-    0x20, 0xAB, 0x3F, 0x45, 0xB7, 0x4F, 0x10, 0xB6,
-    0xE1, 0x1F, 0x96, 0xA2, 0xC8, 0xEB, 0x69, 0x4D,
-    0x20, 0x6B, 0x9D, 0xDA, 0x86, 0xD3, 0xC7, 0xE3,
-    0x31, 0xC2, 0x6B, 0x22, 0xC9, 0x87, 0xB7, 0x53,
-    0x77, 0x26, 0x57, 0x76, 0x67, 0xAD, 0xAD, 0xF1,
-    0x68, 0xEB, 0xBE, 0x80, 0x37, 0x94, 0xA4, 0x02
-};
-#endif
 
 //static char P521_p_string[] =
 //        "01ff ffffffff ffffffff ffffffff ffffffff ffffffff"
@@ -648,6 +547,12 @@ static uint8_t P521_n_buf[] =
     0x64, 0x09
 };
 
+
+static ecc_point_t   *C255_base_pt;
+static ecc_point_t   *C448_base_pt;
+static pka_operand_t *C255_base_pt_order;
+static pka_operand_t *C448_base_pt_order;
+
 static char *TEST_NAME_STRING[] =
 {
     [TEST_NOP]                  = "TEST_NOP",
@@ -664,9 +569,12 @@ static char *TEST_NAME_STRING[] =
     [TEST_RSA_MOD_EXP]          = "TEST_RSA_MOD_EXP",
     [TEST_RSA_VERIFY]           = "TEST_RSA_VERIFY",
     [TEST_RSA_MOD_EXP_WITH_CRT] = "TEST_RSA_MOD_EXP_WITH_CRT",
+    [TEST_MONT_ECDH_MULTIPLY]   = "TEST_MONT_ECDH_MULTIPLY",
     [TEST_ECC_ADD]              = "TEST_ECC_ADD",
     [TEST_ECC_DOUBLE]           = "TEST_ECC_DOUBLE",
     [TEST_ECC_MULTIPLY]         = "TEST_ECC_MULTIPLY",
+    [TEST_MONT_ECDH]            = "TEST_MONT_ECDH",
+    [TEST_MONT_ECDHE]           = "TEST_MONT_ECDHE",
     [TEST_ECDH]                 = "TEST_ECDH",
     [TEST_ECDHE]                = "TEST_ECDHE",
     [TEST_ECDSA_GEN]            = "TEST_ECDSA_GEN",
@@ -785,6 +693,28 @@ void byte_swap_copy(uint8_t *dest, uint8_t *src, uint32_t len)
     for (idx = 0; idx < len; idx++)
         dest[idx] = src[(len - 1) - idx];
 }
+
+static void set_pka_operand(pka_operand_t *operand,
+                     uint8_t       *big_endian_buf_ptr,
+                     uint32_t       buf_len,
+                     uint8_t        big_endian)
+{
+    operand->big_endian = big_endian;
+    operand->buf_len    = buf_len;
+    operand->actual_len = buf_len;
+    operand->buf_ptr    = malloc(buf_len);
+    memset(operand->buf_ptr, 0, buf_len);
+
+    operand->buf_len    = buf_len;
+    operand->actual_len = buf_len;
+
+    // Now fill the operand buf.
+    if (big_endian)
+        memcpy(operand->buf_ptr, big_endian_buf_ptr, buf_len);
+    else
+        byte_swap_copy(operand->buf_ptr, big_endian_buf_ptr, buf_len);
+}
+
 
 static uint32_t get_msb_idx(pka_operand_t *operand)
 {
@@ -1119,8 +1049,7 @@ void init_operand(pka_operand_t *operand,
 }
 
 // Operand must be Initialized first (e.g. by calling init_operand).
-static void set_operand(pka_operand_t *operand,
-                        uint32_t       integer)
+static void set_operand(pka_operand_t *operand, uint32_t integer)
 {
     uint32_t  lsb_idx, idx;
     uint8_t  *buf_ptr;
@@ -1151,10 +1080,14 @@ static void set_operand(pka_operand_t *operand,
     }
 }
 
-static void copy_operand(pka_operand_t *original, pka_operand_t *copy)
+void copy_operand(pka_operand_t *original, pka_operand_t *copy)
 {
-    copy->actual_len = original->actual_len;
-    copy->big_endian = original->big_endian;
+    uint8_t *copy_buf_ptr;
+
+    copy_buf_ptr = copy->buf_ptr;
+    memcpy(copy, original, sizeof(pka_operand_t));
+
+    copy->buf_ptr = copy_buf_ptr;
     memcpy(copy->buf_ptr, original->buf_ptr, original->actual_len);
 }
 
@@ -1678,6 +1611,326 @@ void init_ecc_point(ecc_point_t *ecc_pt,
     init_operand(&ecc_pt->y, buf_y, buf_len, big_endian);
 }
 
+static void init_mont_curves(void)
+{
+
+    // Initialize the two Montgomery curves
+    memset(&curve25519, 0, sizeof(curve25519));
+    set_pka_operand(&curve25519.p, curve25519_p_buf,
+                    sizeof(curve25519_p_buf), 0);
+    set_pka_operand(&curve25519.A, curve25519_A_buf,
+                    sizeof(curve25519_A_buf), 0);
+    curve25519.type = PKA_CURVE_25519;
+
+    memset(&curve448, 0, sizeof(curve448));
+    set_pka_operand(&curve448.p, curve448_p_buf,
+                    sizeof(curve448_p_buf), 0);
+    set_pka_operand(&curve448.A, curve448_A_buf,
+                    sizeof(curve448_A_buf), 0);
+    curve448.type = PKA_CURVE_448;
+}
+
+ecc_point_t *make_mont_ecc_point(ecc_mont_curve_t *curve,
+                                 uint8_t     *big_endian_buf_x_ptr,
+                                 uint32_t     buf_x_len,
+                                 uint8_t     *big_endian_buf_y_ptr,
+                                 uint32_t     buf_y_len,
+                                 uint8_t      big_endian)
+{
+    ecc_point_t *ecc_point;
+
+    ecc_point = malloc(sizeof(ecc_point_t));
+    memset(ecc_point, 0, sizeof(ecc_point_t));
+
+    ecc_point->x.big_endian = big_endian;
+    ecc_point->y.big_endian = big_endian;
+
+    make_operand_buf(&ecc_point->x, big_endian_buf_x_ptr, buf_x_len);
+    make_operand_buf(&ecc_point->y, big_endian_buf_y_ptr, buf_y_len);
+
+    return ecc_point;
+}
+
+static pka_result_code_t pki_internal_subtract(pka_operand_t *value,
+                                               pka_operand_t *subtrahend,
+                                               pka_operand_t *result)
+{
+    uint32_t minuend_byte_len, subtrahend_byte_len, result_byte_len;
+    uint32_t borrow, minuend_byte, subtrahend_byte, result_byte;
+    uint32_t byte_cnt;
+    uint8_t *minuend_ptr, *subtrahend_ptr, *result_ptr;
+
+    minuend_byte_len    = value->actual_len;
+    subtrahend_byte_len = subtrahend->actual_len;
+    result_byte_len     = minuend_byte_len;
+    result->actual_len  = result_byte_len;
+
+    minuend_ptr    = &value->buf_ptr[0];
+    subtrahend_ptr = &subtrahend->buf_ptr[0];
+    result_ptr     = &result->buf_ptr[0];
+
+    // Subtract subtrahend from minued by proceeding from the least significant
+    // bytes to the most significant bytes.
+    borrow = 0;
+    for (byte_cnt = 0; byte_cnt < minuend_byte_len; byte_cnt++)
+    {
+        minuend_byte = *minuend_ptr;
+        if (byte_cnt < subtrahend_byte_len)
+            subtrahend_byte = (*subtrahend_ptr) + borrow;
+        else
+            subtrahend_byte = borrow;
+
+        if (subtrahend_byte <= minuend_byte)
+        {
+            result_byte = minuend_byte - subtrahend_byte;
+            borrow    = 0;
+        }
+        else
+        {
+            result_byte = (256 + minuend_byte) - subtrahend_byte;
+            borrow    = 1;
+        }
+
+        *result_ptr = result_byte;
+        minuend_ptr++;
+        subtrahend_ptr++;
+        result_ptr++;
+    }
+
+    // Finally adjust the actual length by skipping any leading zeros.
+    result_byte_len = result->actual_len;
+    result_ptr      = &result->buf_ptr[result_byte_len - 1];
+    while ((*result_ptr == 0) && (1 <= result_byte_len))
+    {
+        result_ptr--;
+        result_byte_len--;
+    }
+
+    result->actual_len = result_byte_len;
+    return RC_NO_ERROR;
+}
+
+static pka_comparison_t pki_internal_compare(uint8_t *value_buf_ptr,
+                                             uint8_t *comparend_buf_ptr,
+                                             uint32_t operand_len,
+                                             uint8_t  is_big_endian)
+{
+    uint32_t idx, value_len, comparend_len;
+
+    if (is_big_endian)
+    {
+        // Start the comparison at the most significant end which is at the
+        // lowest idx.  But first we need to skip any leading zeros!
+        value_len = operand_len;
+        while ((value_buf_ptr[0] == 0) && (2 <= value_len))
+        {
+            value_buf_ptr++;
+            value_len--;
+        }
+
+        comparend_len = operand_len;
+        while ((comparend_buf_ptr[0] == 0) && (2 <= comparend_len))
+        {
+            comparend_buf_ptr++;
+            comparend_len--;
+        }
+
+        if (value_len < comparend_len)
+            return PKA_LESS_THAN;
+        else if (comparend_len < value_len)
+            return PKA_GREATER_THAN;
+
+        operand_len = value_len;
+        for (idx = 1;  idx <= operand_len;  idx++)
+        {
+            if (value_buf_ptr[0] < comparend_buf_ptr[0])
+                return PKA_LESS_THAN;
+            else if (value_buf_ptr[0] > comparend_buf_ptr[0])
+                return PKA_GREATER_THAN;
+
+            value_buf_ptr++;
+            comparend_buf_ptr++;
+        }
+    }
+    else
+    {
+        // Start the comparison at the most significant end which is at the
+        // highest idx.  But first we need to skip any leading zeros!
+        value_buf_ptr = &value_buf_ptr[operand_len - 1];
+        value_len     = operand_len;
+        while ((value_buf_ptr[0] == 0) && (2 <= value_len))
+        {
+            value_buf_ptr--;
+            value_len--;
+        }
+
+        comparend_buf_ptr = &comparend_buf_ptr[operand_len - 1];
+        comparend_len     = operand_len;
+        while ((comparend_buf_ptr[0] == 0) && (2 <= comparend_len))
+        {
+            comparend_buf_ptr--;
+            comparend_len--;
+        }
+
+        if (value_len < comparend_len)
+            return PKA_LESS_THAN;
+        else if (comparend_len < value_len)
+            return PKA_GREATER_THAN;
+
+        operand_len = value_len;
+        for (idx = 1;  idx <= operand_len;  idx++)
+        {
+            if (value_buf_ptr[0] < comparend_buf_ptr[0])
+                return PKA_LESS_THAN;
+            else if (value_buf_ptr[0] > comparend_buf_ptr[0])
+                return PKA_GREATER_THAN;
+
+            value_buf_ptr--;
+            comparend_buf_ptr--;
+        }
+    }
+
+    return PKA_EQUAL;
+}
+
+
+/// This function, returns 1 if the given value is less than or equal to
+/// the curve prime.  Specifically will return 0 for curve25519 iff the value
+/// is between 2^255 - 19 and 2^255 - 1.  For curve448, it will return 0 iff
+/// the value is between 2^448 - 2^224 - 1 and 2^448 - 1.  Note that it is
+/// exceedingly rare for this function to return 0 on random inputs.
+static int pki_is_mont_ecdh_canonical(ecc_mont_curve_t* curve,
+                                      pka_operand_t*    point_x)
+{
+    pka_comparison_t rc;
+    uint32_t         idx;
+    uint8_t          big_endian, ls_byte, ms_byte;
+
+    big_endian = point_x->big_endian;
+    if (curve->type == PKA_CURVE_25519)
+    {
+        if (point_x->actual_len != 32)
+            return 1;
+
+        // We want to see if point_x (with a special adjustment of the
+        // most significant byte) is < the curve prime.
+        // First do a quick test
+        ls_byte = point_x->buf_ptr[big_endian ? 31 : 0];
+        if (ls_byte < 0xED) // 237 = 256 - 19
+            return 1;
+
+        // Loop over the bytes from least significant to most significant
+        // looking for a byte != 0xFF.  The most signifcant byte is special.
+        if (big_endian)
+        {
+            for (idx = 1; idx <= 30; idx++)
+                if (point_x->buf_ptr[31 - idx] != 0xFF)
+                    return 1;
+
+            ms_byte = point_x->buf_ptr[0];
+        }
+        else
+        {
+            for (idx = 1; idx <= 30; idx++)
+                if (point_x->buf_ptr[idx] != 0xFF)
+                    return 1;
+
+            ms_byte = point_x->buf_ptr[31];
+        }
+
+        ms_byte &= 0x7F;
+        return ms_byte != 0x7F;
+    }
+    else if (curve->type == PKA_CURVE_448)
+    {
+        if (point_x->actual_len != 56)
+            return 1;
+
+        // Quick test *TBD*
+        ms_byte = point_x->buf_ptr[big_endian ? 0 : 55];
+        if (ms_byte != 0xFF)
+            return 1;
+
+        rc = pki_internal_compare(point_x->buf_ptr, curve->p.buf_ptr, 56,
+                                  big_endian);
+        if (rc == PKA_LESS_THAN)
+            return 1;
+
+        return 0;
+    }
+    else
+        return 1;
+}
+
+/// This function will first check if the value is already canonical (by
+/// calling pka_is_mont_ecdh_canonical), and if it is not canonical, it will
+/// do a modular reduction of value by the curve prime.
+static int pki_mont_ecdh_canonicalize(pka_handle_t      handle,
+                                      ecc_mont_curve_t* curve,
+                                      pka_operand_t*    point_x,
+                                      pka_operand_t*    reduced_value)
+{
+    pka_result_code_t rc;
+    pka_operand_t     temp;
+    uint8_t           temp_buf[MAX_ECC_BUF];
+    int               is_canonical;
+
+    is_canonical = pki_is_mont_ecdh_canonical(curve, point_x);
+    if (is_canonical)
+        return -1;
+
+    // Make a local copy of point_x first
+    memcpy(&temp, point_x, sizeof(temp));
+    temp.buf_ptr = &temp_buf[0];
+    memcpy(temp.buf_ptr, point_x->buf_ptr, point_x->actual_len);
+    if (curve->type == PKA_CURVE_25519)
+        temp.buf_ptr[31] &= 0x7F;
+
+    rc = pki_internal_subtract(&temp, &curve->p, reduced_value);
+    if (rc == RC_NO_ERROR)
+        return 0;
+    else
+        return -1;
+}
+
+static int pki_adjust_mont_ecdh_multiplier(pka_operand_t *dst_operand,
+                                           pka_operand_t *src_operand,
+                                           pka_operand_t *curve_p)
+{
+    uint32_t prime_byte_len, src_byte_len, msb_byte_idx;
+
+    // Two different cases: Curve25519 and Cureve448.  Distinguish these cases
+    // by looking at the length of the curve prime
+    prime_byte_len = curve_p->actual_len;
+    src_byte_len   = src_operand->actual_len;
+    memset(dst_operand->buf_ptr, 0, dst_operand->buf_len);
+    memcpy(dst_operand->buf_ptr, src_operand->buf_ptr, src_byte_len);
+    if (prime_byte_len == 32)
+    {
+        // For curve25519, clear the three least significant bit (bits 0, 1
+        // and 2), clear the most significant bit (bit 255), and set the next
+        // most significant bit (bit 254).
+        PKA_ASSERT(32 <= dst_operand->buf_len);
+        msb_byte_idx                        = 31;
+        dst_operand->buf_ptr[0]            &= 0xF8;
+        dst_operand->buf_ptr[msb_byte_idx] &= 0x7F;
+        dst_operand->buf_ptr[msb_byte_idx] |= 0x40;
+        dst_operand->actual_len             = 32;
+    }
+    else if (prime_byte_len == 56)
+    {
+        // For curve448, clear the two least significant bit (bits 0 and 1),
+        // and set the most significant bit (bit 487) to 1.
+        PKA_ASSERT(56 <= dst_operand->buf_len);
+        msb_byte_idx                        = 55;
+        dst_operand->buf_ptr[0]            &= 0xFC;
+        dst_operand->buf_ptr[msb_byte_idx] |= 0x80;
+        dst_operand->actual_len             = 56;
+    }
+
+    return 0;
+}
+
 ecc_point_t *make_ecc_point(ecc_curve_t *curve,
                             uint8_t     *big_endian_buf_x_ptr,
                             uint32_t     buf_x_len,
@@ -1695,12 +1948,6 @@ ecc_point_t *make_ecc_point(ecc_curve_t *curve,
 
     make_operand_buf(&ecc_point->x, big_endian_buf_x_ptr, buf_x_len);
     make_operand_buf(&ecc_point->y, big_endian_buf_y_ptr, buf_y_len);
-
-    if (curve != NULL)
-    {
-        if (is_point_on_curve(curve, ecc_point) != 1)
-            PKA_ERROR(PKA_TESTS,  "point not on curve\n\n");
-    }
 
     return ecc_point;
 }
@@ -2349,8 +2596,9 @@ pka_result_code_t pki_shift_right(pka_operand_t *value,
                                   pka_operand_t *result)
 {
     uint32_t value_bit_len, value_byte_len, result_bit_len, byte_shift;
-    uint32_t result_byte_len, bit_shift, copy_len, shift_out, cnt;
-    uint32_t value_idx, result_idx, value_byte, result_byte;
+    uint32_t result_byte_len, bit_shift, copy_len, acc, acc_mask;
+    uint32_t value_byte, result_byte;
+    int32_t  value_idx, result_idx;
 
     value_bit_len = operand_bit_len(value);
     if (value_bit_len <= shift_cnt)
@@ -2374,15 +2622,25 @@ pka_result_code_t pki_shift_right(pka_operand_t *value,
     }
 
     // Loop from MSB to LSB.
-    shift_out = 0;
-    for (cnt = 0; cnt < result_byte_len; cnt++)
+    value_idx  = (value_byte_len  - 1);
+    result_idx = (result_byte_len - 1);
+
+    // Initialize the accumulator
+    acc = 0;
+    if (result_byte_len < value_byte_len)
+        acc = value->buf_ptr[value_idx--];
+
+    while (result_idx >= 0)
     {
-        value_idx   = (value_byte_len  - 1) - cnt;
-        result_idx  = (result_byte_len - 1) - cnt;
-        value_byte  = value->buf_ptr[value_idx];
-        result_byte = shift_out | (value_byte >> bit_shift);
-        shift_out   = value_byte << (8 - bit_shift);
-        result->buf_ptr[result_idx] = result_byte;
+        // Add the next value byte to the accumulator
+        value_byte  = value->buf_ptr[value_idx--];
+        acc         = (acc << 8) | value_byte;
+
+        // Remove a shifted result byte
+        result_byte = acc >> bit_shift;
+        acc_mask    = (0x1 << bit_shift) - 1;
+        acc         = acc & acc_mask;
+        result->buf_ptr[result_idx--] = result_byte;
     }
 
     return RC_NO_ERROR;
@@ -2736,6 +2994,26 @@ pka_result_code_t pki_mod_multiply(pka_operand_t *value,
         return rc;
 
     rc = pki_modulo(&product, modulus, result);
+    return rc;
+}
+
+pka_result_code_t pki_mod_shift_right(pka_operand_t *value,
+				      uint32_t       shift_cnt,
+				      pka_operand_t *modulus,
+				      pka_operand_t *result)
+{
+    pka_result_code_t rc;
+    pka_operand_t     tmp;
+    uint8_t           bufA[MAX_BUF];
+
+    PKA_ASSERT(value->big_endian == modulus->big_endian);
+    init_operand(&tmp, bufA, MAX_BUF, value->big_endian);
+
+    rc = pki_shift_right(value, shift_cnt, &tmp);
+    if (rc != RC_NO_ERROR)
+        return rc;
+
+    rc = pki_modulo(&tmp, modulus, result);
     return rc;
 }
 
@@ -3156,6 +3434,12 @@ pka_result_code_t pki_mod_subtract(pka_operand_t *value,
     return RC_NO_ERROR;
 }
 
+static void copy_ecc_point(ecc_point_t *original, ecc_point_t *copy)
+{
+    copy_operand(&original->x, &copy->x);
+    copy_operand(&original->y, &copy->y);
+}
+
 static pka_result_code_t ecc_double(ecc_curve_t *curve,
                                     ecc_point_t *pointA,
                                     ecc_point_t *result)
@@ -3212,6 +3496,213 @@ static pka_result_code_t ecc_double(ecc_curve_t *curve,
     rc = pki_mod_subtract(&pointA->x, &result->x, &curve->p, &ac_xdiff);
     rc = pki_mod_multiply(&slope,     &ac_xdiff,  &curve->p, &product);
     rc = pki_mod_subtract(&product,   &pointA->y, &curve->p, &result->y);
+    return RC_NO_ERROR;
+}
+
+// The following three functions implement Elliptic Curve point multiplication
+// for curves in Montgomery form in support of the ECDH key exchange
+// algorithm.  This multiplication only uses the x-coordinate of the point,
+// even though it looks like both coordinates are involved.  This is because
+// instead of using affine coordinates, projective coordinates are used,
+// which requires keeping track of the x-coordinate and the z-coordinate.
+// For this purpose the ecc_point_t data structure is used to pass the x and z
+// coordinates - which are still named x and y - which could be confusing.
+
+static pka_result_code_t pki_mont_ecdh_double(ecc_mont_curve_t *curve,
+                                              ecc_point_t      *point,
+                                              ecc_point_t      *result)
+{
+    pka_operand_t v_sum, v_diff, v_sum_sqrd, v_diff_sqrd, U_diff, tmp1, tmp2;
+    pka_operand_t A_sub_2, A2_div_4;
+    uint8_t       bufA[MAX_ECC_BUF], bufB[MAX_ECC_BUF], bufC[MAX_ECC_BUF];
+    uint8_t       bufD[MAX_ECC_BUF], bufE[MAX_ECC_BUF], bufF[MAX_ECC_BUF];
+    uint8_t       bufG[MAX_ECC_BUF], bufH[MAX_ECC_BUF], bufI[MAX_ECC_BUF];
+    uint8_t       big_endian;
+    pka_result_code_t rc;
+
+    big_endian = curve->p.big_endian;
+    PKA_ASSERT(big_endian == curve->A.big_endian);
+    PKA_ASSERT(big_endian == point->x.big_endian);
+    PKA_ASSERT(big_endian == point->y.big_endian);
+
+    init_operand(&v_sum,       bufA, MAX_ECC_BUF, big_endian);
+    init_operand(&v_diff,      bufB, MAX_ECC_BUF, big_endian);
+    init_operand(&v_sum_sqrd,  bufC, MAX_ECC_BUF, big_endian);
+    init_operand(&v_diff_sqrd, bufD, MAX_ECC_BUF, big_endian);
+    init_operand(&U_diff,      bufE, MAX_ECC_BUF, big_endian);
+    init_operand(&tmp1,        bufF, MAX_ECC_BUF, big_endian);
+    init_operand(&tmp2,        bufG, MAX_ECC_BUF, big_endian);
+    init_operand(&A_sub_2,     bufH, MAX_ECC_BUF, big_endian);
+    init_operand(&A2_div_4,    bufI, MAX_ECC_BUF, big_endian);
+
+    // ECC Montgomery point doubling is done using the following formulas:
+    // A24       = (A - 2) / 4;
+    // U_diff    = ((x + z)^2 - (x - z)^2)                mod p
+    // result->x = ((x + z)^2 * (x - z)^2)                mod p
+    // result->z = ((A24 * Udiff) + (x + z)^2) * U_diff   mod p
+    //
+    // Or in more detail:
+    // v_sum       = (point->x     + point->z)    mod p;
+    // v_diff      = (point->x     - point->z)    mod p;
+    // v_sum_sqrd  = (v_sum        * v_sum)       mod p;
+    // v_diff_sqrd = (v_diff       * v_diff)      mod p;
+    // U_diff      = (v_sum_sqrd   - v_diff_sqrd) mod p;
+    // tmp1        = ((A - 2) / 4) * U_diff       mod p;
+    // tmp2        = (tmp1         + v_sum_sqrd)  mod p;
+    // result->x   = (v_sum_sqrd   * v_diff_sqrd) mod p;
+    // result->z   = (tmp2         * U_diff)      mod p;
+
+    rc = pki_mod_subtract(&curve->A,    &TWO,         &curve->p, &A_sub_2);
+    rc = pki_shift_right(&A_sub_2,      2,                       &A2_div_4);
+
+    rc = pki_mod_add(&point->x,         &point->y,    &curve->p, &v_sum);
+    rc = pki_mod_subtract(&point->x,    &point->y,    &curve->p, &v_diff);
+    rc = pki_mod_multiply(&v_sum,       &v_sum,       &curve->p, &v_sum_sqrd);
+    rc = pki_mod_multiply(&v_diff,      &v_diff,      &curve->p, &v_diff_sqrd);
+    rc = pki_mod_subtract(&v_sum_sqrd,  &v_diff_sqrd, &curve->p, &U_diff);
+    rc = pki_mod_multiply(&A2_div_4,    &U_diff,      &curve->p, &tmp1);
+    rc = pki_mod_add(&tmp1,             &v_sum_sqrd,  &curve->p, &tmp2);
+    rc = pki_mod_multiply(&v_sum_sqrd,  &v_diff_sqrd, &curve->p, &result->x);
+    rc = pki_mod_multiply(&tmp2,        &U_diff,      &curve->p, &result->y);
+    return RC_NO_ERROR;
+}
+
+pka_result_code_t pki_mont_ecdh_add(ecc_mont_curve_t *curve,
+                                    ecc_point_t      *pointP,
+                                    ecc_point_t      *pointQ,
+                                    pka_operand_t    *point_x,
+                                    ecc_point_t      *result_pt)
+{
+    pka_operand_t vp_sum, vq_sum, vp_diff, vq_diff, tmp1, tmp2;
+    pka_operand_t tmp1_add_tmp2, tmp1_sub_tmp2, tmp3, tmp4;
+    uint8_t       bufA[MAX_ECC_BUF], bufB[MAX_ECC_BUF], bufC[MAX_ECC_BUF];
+    uint8_t       bufD[MAX_ECC_BUF], bufE[MAX_ECC_BUF], bufF[MAX_ECC_BUF];
+    uint8_t       bufG[MAX_ECC_BUF], bufH[MAX_ECC_BUF], bufI[MAX_ECC_BUF];
+    uint8_t       bufJ[MAX_ECC_BUF];
+    uint8_t       big_endian;
+    pka_result_code_t rc;
+
+    big_endian = curve->p.big_endian;
+    PKA_ASSERT(big_endian == curve->A.big_endian);
+    PKA_ASSERT(big_endian == pointP->x.big_endian);
+    PKA_ASSERT(big_endian == pointP->y.big_endian);
+    PKA_ASSERT(big_endian == pointQ->x.big_endian);
+    PKA_ASSERT(big_endian == pointQ->y.big_endian);
+
+    init_operand(&vp_sum,        bufA, MAX_ECC_BUF, big_endian);
+    init_operand(&vq_sum,        bufB, MAX_ECC_BUF, big_endian);
+    init_operand(&vp_diff,       bufC, MAX_ECC_BUF, big_endian);
+    init_operand(&vq_diff,       bufD, MAX_ECC_BUF, big_endian);
+    init_operand(&tmp1,          bufE, MAX_ECC_BUF, big_endian);
+    init_operand(&tmp2,          bufF, MAX_ECC_BUF, big_endian);
+    init_operand(&tmp1_add_tmp2, bufG, MAX_ECC_BUF, big_endian);
+    init_operand(&tmp1_sub_tmp2, bufH, MAX_ECC_BUF, big_endian);
+    init_operand(&tmp3,          bufI, MAX_ECC_BUF, big_endian);
+    init_operand(&tmp4,          bufJ, MAX_ECC_BUF, big_endian);
+
+    // ECC point addition is accomplished using the following formulas:
+    // T1        = (pointQ->x - pointQ->z) * (pointP->x + pointP->z)  mod p
+    // T2        = (pointP->x - pointP->z) * (pointQ->x + pointQ->z)  mod p
+    // result->x = (T1 + T2)^2               mod p
+    // result->z = (T1 - T2)^2 * point_x     mod p
+    //
+    // Or in more detail:
+    // vp_sum    = pointP->x + pointP->z     mod p;
+    // vq_sum    = pointQ->x + pointQ->z     mod p;
+    // vp_diff   = pointP->x - pointP->z     mod p;
+    // vq_diff   = pointQ->x - pointQ->z     mod p;
+    // tmp1      = (vq_diff  * vp_sum)       mod p;
+    // tmp2      = (vp_diff  * vq_sum)       mod p;
+    // tmp3      = (tmp1     + tmp2)^2       mod p;
+    // tmp4      = (tmp1     - tmp2)^2       mod p;
+    // result->x = tmp3;
+    // result->z = point_x   * tmp4          mod p;
+
+    rc = pki_mod_add(&pointP->x,      &pointP->y, &curve->p, &vp_sum);
+    rc = pki_mod_add(&pointQ->x,      &pointQ->y, &curve->p, &vq_sum);
+    rc = pki_mod_subtract(&pointP->x, &pointP->y, &curve->p, &vp_diff);
+    rc = pki_mod_subtract(&pointQ->x, &pointQ->y, &curve->p, &vq_diff);
+    rc = pki_mod_multiply(&vq_diff,   &vp_sum,    &curve->p, &tmp1);
+    rc = pki_mod_multiply(&vp_diff,   &vq_sum,    &curve->p, &tmp2);
+    rc = pki_mod_add(&tmp1,           &tmp2,      &curve->p, &tmp1_add_tmp2);
+    rc = pki_mod_subtract(&tmp1,      &tmp2,      &curve->p, &tmp1_sub_tmp2);
+
+    rc = pki_mod_multiply(&tmp1_add_tmp2, &tmp1_add_tmp2, &curve->p, &tmp3);
+    rc = pki_mod_multiply(&tmp1_sub_tmp2, &tmp1_sub_tmp2, &curve->p, &tmp4);
+
+    copy_operand(&tmp3, &result_pt->x);
+    rc = pki_mod_multiply(point_x, &tmp4, &curve->p, &result_pt->y);
+
+    adjust_actual_len(&result_pt->x);
+    adjust_actual_len(&result_pt->y);
+    return RC_NO_ERROR;
+}
+
+static pka_result_code_t pki_mont_ecdh_multiply(ecc_mont_curve_t *curve,
+                                                pka_operand_t    *point_x,
+                                                pka_operand_t    *multiplier,
+                                                pka_operand_t    *result_pt_x)
+{
+    pka_operand_t inv_z;
+    ecc_point_t   r0, r1, r0_add_r1, r0_dbl, r1_dbl;
+    uint32_t      multiplier_bit_len, bit_idx, cnt;
+    uint8_t       bufA[MAX_ECC_BUF], bufB[MAX_ECC_BUF], bufC[MAX_ECC_BUF];
+    uint8_t       bufD[MAX_ECC_BUF], bufE[MAX_ECC_BUF], bufF[MAX_ECC_BUF];
+    uint8_t       bufG[MAX_ECC_BUF], bufH[MAX_ECC_BUF], bufI[MAX_ECC_BUF];
+    uint8_t       bufJ[MAX_ECC_BUF], bufK[MAX_ECC_BUF];
+    uint8_t       big_endian;
+    pka_result_code_t rc;
+
+    big_endian = curve->p.big_endian;
+    PKA_ASSERT(big_endian == curve->A.big_endian);
+    PKA_ASSERT(big_endian == point_x->big_endian);
+    PKA_ASSERT(big_endian == multiplier->big_endian);
+
+    init_ecc_point(&r0,        bufA, bufB, MAX_ECC_BUF, big_endian);
+    init_ecc_point(&r1,        bufC, bufD, MAX_ECC_BUF, big_endian);
+    init_ecc_point(&r0_add_r1, bufE, bufF, MAX_ECC_BUF, big_endian);
+    init_ecc_point(&r0_dbl,    bufG, bufH, MAX_ECC_BUF, big_endian);
+    init_ecc_point(&r1_dbl,    bufI, bufJ, MAX_ECC_BUF, big_endian);
+    init_operand(&inv_z,       bufK,       MAX_ECC_BUF, big_endian);
+
+    // Set r0_x to 1 and leave r0_z as 0.
+    // Copy point_x into r1_x and set r1_z to 1 and get multiplier bit length.
+    set_operand(&r0.x, 1);
+    copy_operand(point_x, &r1.x);
+    set_operand(&r1.y, 1);
+
+    multiplier_bit_len = operand_bit_len(multiplier);
+    if (multiplier_bit_len < 2)
+    {
+        PKA_ERROR(PKA_TESTS,  "mult_bit_len=%u\n", multiplier_bit_len);
+        return RC_OPERAND_VALUE_ERR;
+    }
+
+    for (cnt = 1; cnt <= multiplier_bit_len; cnt++)
+    {
+        bit_idx = multiplier_bit_len - cnt;
+        pki_mont_ecdh_add(curve, &r0, &r1, point_x, &r0_add_r1);
+        if (get_bit(multiplier, bit_idx) != 0)
+        {
+            pki_mont_ecdh_double(curve, &r1, &r1_dbl);
+            copy_ecc_point(&r0_add_r1, &r0);
+            copy_ecc_point(&r1_dbl,    &r1);
+        }
+        else
+        {
+            pki_mont_ecdh_double(curve, &r0, &r0_dbl);
+            copy_ecc_point(&r0_add_r1, &r1);
+            copy_ecc_point(&r0_dbl,    &r0);
+	}
+    }
+
+    // Now return X/Z as stored in r0.  First we need to invert Z and then
+    // multiply the inverse by X, all modulo p.  The X and Z coordinates we
+    // use will always be in r0, not r1.
+    rc = pki_mod_inverse(&r0.y,          &curve->p, &inv_z);
+    rc = pki_mod_multiply(&r0.x, &inv_z, &curve->p, result_pt_x);
+
+    adjust_actual_len(result_pt_x);
     return RC_NO_ERROR;
 }
 
@@ -3275,12 +3766,6 @@ pka_result_code_t pki_ecc_add(ecc_curve_t *curve,
     adjust_actual_len(&result_pt->x);
     adjust_actual_len(&result_pt->y);
     return RC_NO_ERROR;
-}
-
-static void copy_ecc_point(ecc_point_t *original, ecc_point_t *copy)
-{
-    copy_operand(&original->x, &copy->x);
-    copy_operand(&original->y, &copy->y);
 }
 
 pka_result_code_t pki_ecc_multiply(ecc_curve_t   *curve,
@@ -3589,7 +4074,7 @@ bool signatures_are_equal(dsa_signature_t *left_sig,
     return true;
 }
 
-bool is_valid_curve(pka_handle_t  handle, ecc_curve_t *curve)
+bool is_valid_curve(pka_handle_t handle, ecc_curve_t *curve)
 {
     pka_operand_t *const_4, *const_27, *a_squared, *a_cubed, *b_squared;
     pka_operand_t *a_cubed_by_4, *b_sqrd_by_27, *final_sum;
@@ -3999,6 +4484,52 @@ pka_operand_t *sw_mod_exp_with_crt(pka_handle_t   handle,
 
     PKA_ERROR(PKA_TESTS,  "sw_mod_exp_with_crt failed rc=%d\n", rc);
     free_operand(result);
+    return NULL;
+}
+
+pka_operand_t *sw_mont_ecdh_multiply(pka_handle_t      handle,
+                                     ecc_mont_curve_t *curve,
+                                     pka_operand_t    *point_x,
+                                     pka_operand_t    *multiplier)
+{
+    pka_result_code_t rc;
+    pka_operand_t    *result_pt_x, adjusted_mult, reduced_point_x;
+    uint8_t           big_endian, is_canonical, mult_buf[MAX_ECC_BUF];
+    uint8_t           reduced_point_buf[MAX_ECC_BUF];
+
+    big_endian              = 0;  // pka_get_rings_byte_order(handle);
+    result_pt_x             = malloc_operand(MAX_ECC_BUF);
+    result_pt_x->big_endian = big_endian;
+
+    is_canonical = pki_is_mont_ecdh_canonical(curve, point_x);
+    if (!is_canonical)
+    {
+	memset(&reduced_point_x,      0, sizeof(pka_operand_t));
+	memset(&reduced_point_buf[0], 0, MAX_ECC_BUF);
+	reduced_point_x.buf_len      = MAX_ECC_BUF;
+	reduced_point_x.actual_len   = 0;
+	reduced_point_x.is_encrypted = 0;
+	reduced_point_x.big_endian   = big_endian;
+	reduced_point_x.buf_ptr      = &reduced_point_buf[0];
+
+	rc = pki_mont_ecdh_canonicalize(handle, curve, point_x,
+                                        &reduced_point_x);
+	if (rc == 0)
+            point_x = &reduced_point_x;
+    }
+
+    // Adjust multiplier
+    memcpy(&adjusted_mult, multiplier, sizeof(adjusted_mult));
+    adjusted_mult.buf_ptr = &mult_buf[0];
+    adjusted_mult.buf_len = MAX_ECC_BUF;
+    pki_adjust_mont_ecdh_multiplier(&adjusted_mult, multiplier, &curve->p);
+
+    rc = pki_mont_ecdh_multiply(curve, point_x, &adjusted_mult, result_pt_x);
+    if (rc == RC_NO_ERROR)
+        return result_pt_x;
+
+    PKA_ERROR(PKA_TESTS, "sw_mont_ecdh_multiply failed rc=%d\n", rc);
+    free_operand(result_pt_x);
     return NULL;
 }
 
@@ -4536,6 +5067,21 @@ pka_operand_t *sync_mod_exp_with_crt(pka_handle_t   handle,
             pka_modular_exp_crt(handle, NULL, msg, p, q, d_p, d_q, qinv))
     {
         PKA_ERROR(PKA_TESTS,  "sync_exp_with_crt failed\n");
+        return NULL;
+    }
+
+    return results_to_operand(handle);
+}
+
+pka_operand_t *sync_mont_ecdh_multiply(pka_handle_t      handle,
+                                       ecc_mont_curve_t *curve,
+                                       pka_operand_t    *pointA_x,
+                                       pka_operand_t    *multiplier)
+{
+    if (SUCCESS != pka_mont_ecdh_mult(handle, NULL, curve, pointA_x,
+                                      multiplier))
+    {
+        PKA_ERROR(PKA_TESTS, "sync_ecc_mont_multiply failed\n");
         return NULL;
     }
 
@@ -5147,6 +5693,54 @@ static pka_status_t create_rsa_test_descs(pka_handle_t       handle,
     return SUCCESS;
 }
 
+uint8_t is_point_on_mont_curve(ecc_mont_curve_t *curve, ecc_point_t *point)
+{
+    pka_operand_t     y_squared, x_squared, x_cubed, x_sqrd_times_A, temp, rhs;
+    pka_result_code_t rc;
+    pka_cmp_code_t    comparison;
+    uint8_t           bufA[MAX_ECC_BUF], bufB[MAX_ECC_BUF], bufC[MAX_ECC_BUF];
+    uint8_t           bufD[MAX_ECC_BUF], bufE[MAX_ECC_BUF], bufF[MAX_ECC_BUF];
+    uint8_t           big_endian;
+
+    big_endian = curve->p.big_endian;
+    PKA_ASSERT(big_endian == curve->A.big_endian);
+    PKA_ASSERT(big_endian == point->x.big_endian);
+    PKA_ASSERT(big_endian == point->y.big_endian);
+
+    init_operand(&y_squared,      bufA, MAX_ECC_BUF, big_endian);
+    init_operand(&x_squared,      bufB, MAX_ECC_BUF, big_endian);
+    init_operand(&x_cubed,        bufC, MAX_ECC_BUF, big_endian);
+    init_operand(&x_sqrd_times_A, bufD, MAX_ECC_BUF, big_endian);
+    init_operand(&temp,           bufE, MAX_ECC_BUF, big_endian);
+    init_operand(&rhs,            bufF, MAX_ECC_BUF, big_endian);
+
+    // Need to compare "y^2 mod p" with "x^3 + A*x^2 + x mod p"
+    rc = pki_mod_multiply(&point->y,  &point->y,       &curve->p, &y_squared);
+    rc = pki_mod_multiply(&point->x,  &point->x,       &curve->p, &x_squared);
+    rc = pki_mod_multiply(&x_squared, &point->x,       &curve->p, &x_cubed);
+    rc = pki_mod_multiply(&x_squared, &curve->A,       &curve->p, &x_sqrd_times_A);
+    rc = pki_mod_add(&x_cubed,        &x_sqrd_times_A, &curve->p, &temp);
+    rc = pki_mod_add(&temp,           &point->x,       &curve->p, &rhs);
+
+    comparison = pki_compare(&y_squared, &rhs);
+    if (comparison != RC_COMPARE_EQUAL)
+    {
+        PKA_ERROR(PKA_TESTS,  " is_point_on_mont_curve comparison=%u\n",
+                  comparison);
+        print_operand("x                 =", &point->x,       "\n");
+        print_operand("y                 =", &point->y,       "\n");
+        print_operand("y^2 mod p         =", &y_squared,      "\n");
+        print_operand("x^2 mod p         =", &x_squared,      "\n");
+        print_operand("x^3 mod p         =", &x_cubed,        "\n");
+        print_operand("A*x^2 mod p       =", &x_sqrd_times_A, "\n");
+        print_operand("x^3 + A*x^2 mod p =", &temp,           "\n");
+        print_operand("rhs               =", &rhs,            "\n\n");
+        return 0;
+    }
+
+    return 1;
+}
+
 uint8_t is_point_on_curve(ecc_curve_t *curve, ecc_point_t *point)
 {
     pka_operand_t     y_squared, x_squared, x_cubed, x_times_a, temp, rhs;
@@ -5195,6 +5789,146 @@ uint8_t is_point_on_curve(ecc_curve_t *curve, ecc_point_t *point)
     }
 
     return 1;
+}
+
+static mont_ecdh_keys_t *create_mont_ecdh_keys(pka_handle_t handle,
+                                               uint32_t     bit_len,
+                                               uint32_t     verbosity)
+{
+    mont_ecdh_keys_t *ecdh_keys;
+
+    ecdh_keys = calloc(1, sizeof(mont_ecdh_keys_t));
+    if (bit_len == 255)
+    {
+        ecdh_keys->curve         = &curve25519;
+        ecdh_keys->base_pt_x     = &C255_base_pt->x;
+        ecdh_keys->base_pt_order = C255_base_pt_order;
+    }
+    else if (bit_len == 448)
+    {
+        ecdh_keys->curve         = &curve448;
+        ecdh_keys->base_pt_x     = &C448_base_pt->x;
+        ecdh_keys->base_pt_order = C448_base_pt_order;
+    }
+    else
+    {
+        PKA_ERROR(PKA_TESTS,
+                  "create_mont_ecdh_keys failed to select an ecc curve\n");
+        return NULL;
+    }
+
+    return ecdh_keys;
+}
+
+static test_mont_ecdh_t *create_mont_ecdh_test(pka_handle_t      handle,
+                                               pka_test_name_t   test_name,
+                                               mont_ecdh_keys_t *ecdh_keys,
+                                               uint32_t          bit_len,
+                                               bool              make_answers,
+                                               uint32_t          verbosity)
+{
+    ecc_mont_curve_t *curve;
+    test_mont_ecdh_t *ecdh_test;
+    pka_operand_t    *random_mult1, *random_mult2;
+    pka_operand_t    *base_pt_x, *base_pt_order;
+    pka_operand_t    *remote_private_key, *remote_public_key;
+    uint32_t          rand_len;
+
+    curve         = ecdh_keys->curve;
+    base_pt_x     = ecdh_keys->base_pt_x;
+    base_pt_order = ecdh_keys->base_pt_order;
+    ecdh_test     = calloc(1, sizeof(test_mont_ecdh_t));
+    rand_len      = bit_len - 4;
+
+    LOG(2, "  find some large random integers to use as ECC test operands.\n");
+    random_mult1       = rand_operand(handle, rand_len, false);
+    random_mult2       = rand_operand(handle, rand_len, false);
+    remote_private_key = rand_non_zero_integer(handle, base_pt_order);
+    remote_public_key  = sw_mont_ecdh_multiply(handle, curve, base_pt_x,
+                                               remote_private_key);
+
+    ecdh_test->point_x = sw_mont_ecdh_multiply(handle, curve, base_pt_x,
+                                               random_mult1);
+
+    ecdh_test->multiplier         = random_mult2;
+    ecdh_test->remote_private_key = remote_private_key;
+    ecdh_test->remote_public_key  = remote_public_key;
+    ecdh_test->answer             = NULL;
+
+    if (make_answers == false)
+        return ecdh_test;
+
+    LOG(2, "  calculate the ECC answer using sofware algorithms.\n");
+    LOG(2, "    (note that this can take awhile).\n");
+    if (test_name == TEST_MONT_ECDH_MULTIPLY)
+        ecdh_test->answer = sw_mont_ecdh_multiply(handle, curve,
+                                                  ecdh_test->point_x,
+                                                  ecdh_test->multiplier);
+    else if (test_name == TEST_MONT_ECDH)
+        ecdh_test->answer = sw_mont_ecdh_multiply(handle, curve,
+                                                  remote_public_key,
+                                                  remote_private_key);
+    else
+        PKA_ASSERT(false);
+
+    return ecdh_test;
+}
+
+static pka_status_t create_mont_ecdh_test_descs(pka_handle_t     handle,
+                                                pka_test_kind_t *test_kind,
+                                                test_desc_t     *test_descs[],
+                                                bool             make_answers,
+                                                uint32_t         verbosity)
+{
+    mont_ecdh_keys_t *ecdh_keys;
+    test_mont_ecdh_t *ecdh_test;
+    pka_test_name_t   test_name;
+    test_desc_t      *test_desc;
+    uint32_t          num_key_systems, tests_per_key_system;
+    uint32_t          test_desc_idx, key_cnt, test_cnt, bit_len;
+
+    test_name            = test_kind->test_name;
+    num_key_systems      = test_kind->num_key_systems;
+    tests_per_key_system = test_kind->tests_per_key_system;
+    bit_len              = test_kind->bit_len;
+    LOG(1, "Create %u Montgomery ECDH key systems:\n", num_key_systems);
+
+    PKA_ASSERT((test_name == TEST_MONT_ECDH_MULTIPLY) ||
+               (test_name == TEST_MONT_ECDH) || (test_name == TEST_MONT_ECDHE));
+    if (test_name == TEST_MONT_ECDHE)
+       make_answers = false;
+
+    init_mont_curves();
+
+    // First loop over the creation of the ecdh_keys objects.  Then for each
+    // ecdh_key object create the required number of different ecdh tests.
+    test_desc_idx = 0;
+    for (key_cnt = 1;  key_cnt <= num_key_systems;  key_cnt++)
+    {
+        ecdh_keys = create_mont_ecdh_keys(handle, bit_len, verbosity);
+
+        LOG(1, "Create %u Montgomery ECDH tests (random msg and possible answer).\n",
+            tests_per_key_system);
+
+        for (test_cnt = 1;  test_cnt <= tests_per_key_system;  test_cnt++)
+        {
+            ecdh_test = create_mont_ecdh_test(handle, test_name, ecdh_keys,
+                                              bit_len, make_answers, verbosity);
+            test_desc = calloc(1, sizeof(test_desc_t));
+
+            test_desc->test_kind        = test_kind;
+            test_desc->key_system       = ecdh_keys;
+            test_desc->test_operands    = ecdh_test;
+            test_descs[test_desc_idx++] = test_desc;
+        }
+
+        LOG(1, "Done creating the %u Montgomery ECDH tests.\n",
+            tests_per_key_system);
+    }
+
+    LOG(1, "Done creating the %u Montgomery ECDH key systems.\n",
+        num_key_systems);
+    return SUCCESS;
 }
 
 static ecc_key_system_t *create_ecc_keys(pka_handle_t  handle,
@@ -5513,7 +6247,6 @@ static pka_status_t create_ecdh_test_descs(pka_handle_t       handle,
     test_desc_idx = 0;
     for (key_cnt = 1;  key_cnt <= num_key_systems;  key_cnt++)
     {
-
         ecdh_keys = create_ecdh_key_system(handle, p_bit_len, verbosity);
 
         LOG(1, "Create %u ECDH tests (random msg and possible answer).\n",
@@ -5919,6 +6652,12 @@ pka_status_t create_pka_test_descs(pka_handle_t     handle,
         return create_rsa_test_descs(handle, test_kind, test_descs,
                                      make_answers, verbosity);
 
+    case TEST_MONT_ECDH_MULTIPLY:
+    case TEST_MONT_ECDH:
+    case TEST_MONT_ECDHE:
+        return create_mont_ecdh_test_descs(handle, test_kind, test_descs,
+                                           make_answers, verbosity);
+
     case TEST_ECC_ADD:
     case TEST_ECC_DOUBLE:
     case TEST_ECC_MULTIPLY:
@@ -6018,6 +6757,18 @@ pka_status_t chk_bit_lens(pka_test_kind_t *test_kind)
             "to be in the range 66..4096\n");
         return FAILURE;
 
+    case TEST_MONT_ECDH_MULTIPLY:
+    case TEST_MONT_ECDH:
+    case TEST_MONT_ECDHE:
+        // test_kind->bit_len must either 255 or 448
+        if ((test_kind->bit_len == 255) || (test_kind->bit_len == 448))
+            return SUCCESS;
+
+        PKA_ERROR(PKA_TESTS,
+            "Montgomery ECDH multiply tests are only supported for curve25519 "
+            "or curve448\n");
+        return FAILURE;
+
     case TEST_ECC_ADD:
     case TEST_ECC_DOUBLE:
     case TEST_ECC_MULTIPLY:
@@ -6040,29 +6791,27 @@ pka_status_t chk_bit_lens(pka_test_kind_t *test_kind)
 
     case TEST_ECDH:
     case TEST_ECDHE:
-        // test_kind->bit_len MUST equal 255, 256, 384, 448 or 521
-        if ((test_kind->bit_len == 255) || (test_kind->bit_len == 256) ||
-                (test_kind->bit_len == 384) || (test_kind->bit_len == 448) ||
-                (test_kind->bit_len == 521))
+        // test_kind->bit_len MUST equal 256, 384 or 521
+        if ((test_kind->bit_len == 256) || (test_kind->bit_len == 384) ||
+	    (test_kind->bit_len == 521))
             return SUCCESS;
 
         PKA_ERROR(PKA_TESTS,
-                  "ECDH tests require bit_len to be either 255, 256, 384, "
-                  "448 or 521\n");
+                  "ECDH tests require bit_len to be either 256, 384 "
+                  "or 521\n");
         return FAILURE;
 
     case TEST_ECDSA_GEN:
     case TEST_ECDSA_VERIFY:
     case TEST_ECDSA_GEN_VERIFY:
-        // test_kind->bit_len MUST equal 255, 256, 384, 448 or 521
-        if ((test_kind->bit_len == 255) || (test_kind->bit_len == 256) ||
-                (test_kind->bit_len == 384) || (test_kind->bit_len == 448) ||
-                (test_kind->bit_len == 521))
+        // test_kind->bit_len MUST equal 256, 384 or 521
+        if ((test_kind->bit_len == 256) || (test_kind->bit_len == 384) ||
+	    (test_kind->bit_len == 521))
             return SUCCESS;
 
         PKA_ERROR(PKA_TESTS,
-                  "ECDSA tests require bit_len to be either 255, 256, 384, "
-                  "448 or 521\n");
+                  "ECDSA tests require bit_len to be either 256, 384 "
+                  "or 521\n");
         return FAILURE;
 
     case TEST_DSA_GEN:
@@ -6139,6 +6888,13 @@ static void init_ecc_values(uint8_t big_endian)
                           P521_b_buf, sizeof(P521_b_buf),
                           big_endian);
 
+    C255_base_pt = make_mont_ecc_point(&curve25519,
+                                       Curve255_bp_u_buf,
+                                       sizeof(Curve255_bp_u_buf),
+                                       Curve255_bp_v_buf,
+                                       sizeof(Curve255_bp_u_buf),
+                                       big_endian);
+
     P256_base_pt = make_ecc_point(P256,
                                   P256_xg_buf, sizeof(P256_xg_buf),
                                   P256_yg_buf, sizeof(P256_yg_buf),
@@ -6147,42 +6903,22 @@ static void init_ecc_values(uint8_t big_endian)
                                   P384_xg_buf, sizeof(P384_xg_buf),
                                   P384_yg_buf, sizeof(P384_yg_buf),
                                   big_endian);
+    C448_base_pt = make_mont_ecc_point(&curve448,
+                                       Curve448_bp_u_buf, sizeof(Curve448_bp_u_buf),
+                                       Curve448_bp_v_buf, sizeof(Curve448_bp_u_buf),
+                                       big_endian);
     P521_base_pt = make_ecc_point(P521,
                                   P521_xg_buf, sizeof(P521_xg_buf),
                                   P521_yg_buf, sizeof(P521_yg_buf),
                                   big_endian);
 
-#if 0
-    // Set up B255_ec* params
-    B255_ec.curve = B255;
-    B255_ecdsa.base_pt       = B255_base_pt;
-    B255_ecdsa.base_pt_order = make_operand(B255_n_buf,
-                                            sizeof(B255_n_buf),
-                                            big_endian);
-    B255_ecdsa.private_key   = make_operand(B255_d_buf,
-                                            sizeof(B255_d_buf),
-                                            big_endian);
-    B255_ecdsa.public_key    = make_ecc_point(NULL,
-                                              B255_xq_buf, sizeof(B255_xq_buf),
-                                              B255_yq_buf, sizeof(B255_yq_buf),
-                                              big_endian);
+    C255_base_pt_order = make_operand(Curve255_bp_order_buf,
+                                      sizeof(Curve255_bp_order_buf),
+                                      big_endian);
 
-    B255_kinv                = make_operand(B255_kinv_buf,
-                                            sizeof(B255_kinv_buf),
-                                            big_endian);
-    B255_ecdsa_test.hash     = make_operand(B255_hash_buf,
-                                            sizeof(B255_hash_buf),
-                                            big_endian);
-    B255_ecdsa_test.k        = make_operand(B255_k_buf,
-                                            sizeof(B255_k_buf),
-                                            big_endian);
-
-    B255_ecdsa_test.signature = calloc(1, sizeof(dsa_signature_t));
-    B255_ecdsa_test.signature->s.big_endian = big_endian;
-    make_operand_buf(&B255_ecdsa_test.signature->s,
-                     B255_s_buf,
-                     sizeof(B255_s_buf));
-#endif
+    C448_base_pt_order = make_operand(Curve448_bp_order_buf,
+                                      sizeof(Curve448_bp_order_buf),
+                                      big_endian);
 
     // Set up P256_ecdsa* params
     P256_ecdsa.curve         = P256;
@@ -6243,37 +6979,6 @@ static void init_ecc_values(uint8_t big_endian)
     make_operand_buf(&P384_ecdsa_test.signature->s,
                      P384_s_buf, sizeof(P384_s_buf));
 
-#if 0
-    // Set up Curve448* params
-    Curve448.curve         = Curve448;
-    Curve448.base_pt       = Curve448_base_pt;
-    Curve448.base_pt_order = make_operand(Curve448_n_buf,
-                                            sizeof(Curve448_n_buf),
-                                            big_endian);
-    Curve448.private_key   = make_operand(Curve448_d_buf,
-                                            sizeof(Curve448_d_buf),
-                                            big_endian);
-    Curve448.public_key    = make_ecc_point(NULL,
-                                              Curve448_xq_buf, sizeof(Curve448_xq_buf),
-                                              Curve448_yq_buf, sizeof(Curve448_yq_buf),
-                                              big_endian);
-
-    Curve448_kinv          = make_operand(Curve448_kinv_buf,
-                                           sizeof(Curve448_kinv_buf),
-                                           big_endian);
-    Curve448_test.hash    = make_operand(Curve448_hash_buf,
-                                           sizeof(Curve448_hash_buf),
-                                           big_endian);
-    Curve448_test.k       = make_operand(Curve448_k_buf,
-                                           sizeof(Curve448_k_buf),
-                                           big_endian);
-
-    Curve448_test.signature = calloc(1, sizeof(dsa_signature_t));
-    Curve448_test.signature->s.big_endian = big_endian;
-    make_operand_buf(&Curve448_test.signature->s,
-                     Curve448_s_buf, sizeof(Curve448_s_buf));
-#endif
-
     // Set up P521_ecdsa* params
     P521_ecdsa.curve         = P521;
     P521_ecdsa.base_pt       = P521_base_pt;
@@ -6299,7 +7004,7 @@ void init_test_utils(pka_handle_t handle)
     ZERO.big_endian = big_endian;
     ONE.big_endian  = big_endian;
     TWO.big_endian  = big_endian;
-    init_ecc_values(big_endian);
+    init_ecc_values(0);
 }
 
 pka_status_t get_rand_bytes(pka_handle_t  handle,

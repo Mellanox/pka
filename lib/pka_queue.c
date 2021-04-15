@@ -306,6 +306,17 @@ static uint32_t pka_operands_len(pka_opcode_t  opcode,
 
         break;
 
+    case CC_MONT_ECDH_MULTIPLY:
+        lenA = pka_operand_wlen(&operands[0], MAX_ECC_VEC_SZ);
+        lenB = pka_operand_wlen(&operands[2], MAX_ECC_VEC_SZ);
+
+        operands_wlen += PKA_ALIGN(lenA, 8);
+        operands_wlen += PKA_ALIGN(pka_concat_wlen(lenB, 3, 2, 0), 8);
+        operands_wlen += PKA_ALIGN(lenB + 3, 8);
+        operands_wlen += PKA_ALIGN(lenB, 8);
+
+        break;
+
     case CC_ECC_PT_ADD:
         lenB = MAX(pka_operand_wlen(&operands[0], MAX_ECC_VEC_SZ),
                    pka_operand_wlen(&operands[2], MAX_ECC_VEC_SZ));
