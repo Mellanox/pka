@@ -16,6 +16,9 @@
             PKA_PRINT(PKA_TEST, fmt_and_args); \
     })
 
+ecc_mont_curve_t curve25519;
+ecc_mont_curve_t curve448;
+
 typedef struct
 {
     pka_operand_t *quotient;
@@ -51,6 +54,13 @@ typedef struct
     pka_operand_t *d_q;          // d mod (q-1)
     pka_operand_t *qinv;         // q * qinv mod p = 1
 } rsa_key_system_t;
+
+typedef struct
+{
+    ecc_mont_curve_t *curve;
+    pka_operand_t    *base_pt_x;      // aka x-coordinate of point G
+    pka_operand_t    *base_pt_order;  // aka n - order of point G
+} mont_ecdh_keys_t;
 
 typedef struct
 {
@@ -111,6 +121,18 @@ typedef struct
 
 typedef struct
 {
+    pka_operand_t *point_x;
+    pka_operand_t *multiplier;
+    pka_operand_t *local_private_key;    // aka local d.
+    pka_operand_t *local_public_key;     // aka point local Q
+    pka_operand_t *remote_private_key;   // aka remote d.
+    pka_operand_t *remote_public_key;    // aka point remote Q
+    pka_operand_t *answer;
+} test_mont_ecdh_t;
+
+
+typedef struct
+{
     ecc_point_t   *pointA;
     ecc_point_t   *pointB;
     pka_operand_t *multiplier;
@@ -161,8 +183,14 @@ typedef enum
     // RSA tests.  These use the rsa_key_system_t.
     TEST_RSA_MOD_EXP, TEST_RSA_VERIFY, TEST_RSA_MOD_EXP_WITH_CRT,
 
+    // Montgomery ECC tests.  These use the mont_ecdh_key_system_t.
+    TEST_MONT_ECDH_MULTIPLY,
+
     // Ecc tests.  These use the ecc_key_system_t.
     TEST_ECC_ADD, TEST_ECC_DOUBLE, TEST_ECC_MULTIPLY,
+
+    // Montgomery Ecdh tests.  These use the mont_ecdh_key_system_t.
+    TEST_MONT_ECDH, TEST_MONT_ECDHE,
 
     // Ecdh tests.  These use the ecdh_key_system_t.
     TEST_ECDH, TEST_ECDHE,
@@ -235,8 +263,8 @@ extern ec_key_system_t P384_ec;
 extern ec_key_system_t P521_ec;
 
 // Bernstein curves:
-extern ec_key_system_t B255_ec;
-extern ec_key_system_t B488_ec;
+// extern ec_mont_key_system_t B255_ec;
+// extern ec_mont_key_system_t B488_ec;
 
 //
 // helper functions
@@ -247,6 +275,8 @@ uint32_t byte_len(uint64_t num);
 uint8_t *append_bytes(uint8_t *buf_ptr, uint64_t num, uint32_t num_len);
 
 void byte_swap_copy(uint8_t *dest, uint8_t *src, uint32_t len);
+
+void copy_operand(pka_operand_t *original, pka_operand_t *copy);
 
 void print_operand(char *prefix, pka_operand_t *operand, char *suffix);
 
@@ -511,6 +541,7 @@ bool signatures_are_equal(dsa_signature_t *left_sig,
 
 bool is_valid_curve(pka_handle_t handle, ecc_curve_t *curve);
 
+uint8_t is_point_on_mont_curve(ecc_mont_curve_t *curve, ecc_point_t *point);
 uint8_t is_point_on_curve(ecc_curve_t *curve, ecc_point_t *point);
 
 //
@@ -576,6 +607,11 @@ pka_operand_t *sw_mod_exp_with_crt(pka_handle_t   handle,
                                    pka_operand_t *d_p,
                                    pka_operand_t *d_q,
                                    pka_operand_t *qinv);
+
+pka_operand_t *sw_mont_ecdh_multiply(pka_handle_t      handle,
+                                     ecc_mont_curve_t *curve,
+                                     pka_operand_t    *point_x,
+                                     pka_operand_t    *multiplier);
 
 ecc_point_t *sw_ecc_add(pka_handle_t  handle,
                         ecc_curve_t  *curve,
@@ -683,6 +719,11 @@ pka_operand_t *sync_mod_exp_with_crt(pka_handle_t   handle,
                                      pka_operand_t *d_q,
                                      pka_operand_t *qinv);
 
+pka_operand_t *sync_mont_ecdh_multiply(pka_handle_t      handle,
+                                       ecc_mont_curve_t *curve,
+                                       pka_operand_t    *pointA_x,
+                                       pka_operand_t    *multiplier);
+
 ecc_point_t *sync_ecc_add(pka_handle_t  handle,
                           ecc_curve_t  *curve,
                           ecc_point_t  *pointA,
@@ -692,6 +733,11 @@ ecc_point_t *sync_ecc_multiply(pka_handle_t   handle,
                                ecc_curve_t   *curve,
                                ecc_point_t   *pointA,
                                pka_operand_t *multiplier);
+
+ecc_point_t *sync_mont_ecdh(pka_handle_t      handle,
+                            ecc_mont_curve_t *curve,
+                            ecc_point_t      *point,
+                            pka_operand_t    *private_key);
 
 pka_status_t chk_bit_lens(pka_test_kind_t *test_kind);
 

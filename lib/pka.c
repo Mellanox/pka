@@ -52,7 +52,6 @@
 
 #define PKA_INVALID_OPERANDS    0x0
 
-
 // Start statistics counters. Returns the command number associated with
 // a statistic entry.
 static __pka_inline uint32_t pka_stats_start_cycles_cnt(uint32_t queue_num)
@@ -188,7 +187,6 @@ static void pka_init_worker_queues(pka_global_info_t *info, uint32_t queues_cnt)
     rslt_queue_size    = info->rslt_queue_size;
 
     mem_ptr = info->mem_ptr;
-
 
     // Instead of allocating contiguous command and result queues, we opt
     // for a first pool with all command queues, and a second pool with the
@@ -483,7 +481,6 @@ static int pka_set_cmd_desc(pka_global_info_t      *gbl_info,
 {
     pka_worker_t  *worker;
     pka_queue_t   *cmd_queue;
-
     int ret;
 
     worker    = &gbl_info->workers[worker_id];
@@ -760,7 +757,7 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
     worker_id  = local_info->id;
     worker     = &gbl_info->workers[worker_id];
 
-    // Preapare statistics
+    // Prepare statistics
     cmd_num = pka_stats_start_cycles_cnt(worker_id);
 
     // Set a command descriptor to enqueue.
@@ -808,7 +805,7 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
             }
         }
 
-        local_info->req_num += 1;
+        local_info->req_num++;
         pka_process_queues_nosync(local_info);
         return SUCCESS;
     }
@@ -841,7 +838,7 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
         }
         else
         {
-            if(rc != pka_cmd_enqueue(gbl_info, worker_id, &cmd_desc,
+            if (rc != pka_cmd_enqueue(gbl_info, worker_id, &cmd_desc,
                                         operands->operands))
             {
                 PKA_DEBUG(PKA_USER, "worker %d - failed to enqueue a "
@@ -858,7 +855,7 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
         }
 
         pka_process_queues_sync(local_info);
-        local_info->req_num += 1;
+        local_info->req_num++;
         return SUCCESS;
     }
 
@@ -872,7 +869,7 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
         return FAILURE; // There is not enough room in the SW cmd queue.
     }
 
-    local_info->req_num += 1;
+    local_info->req_num++;
 
     // We failed on our first attempt to acquire the lock.  We will make a
     // second attempt, but first we need to register our request, in case
@@ -893,7 +890,6 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
     // to see our previously set request bit and act on it before it can
     // release the lock.  Hence we can just return.
     return SUCCESS;
-
 }
 
 static void pka_parse_result(pka_queue_rslt_desc_t *rslt_desc,
@@ -1021,7 +1017,6 @@ uint32_t pka_request_count(pka_handle_t handle)
 
     return 0;
 }
-
 
 static uint32_t pka_process_operand(pka_operand_t *value, uint8_t big_endian)
 {
@@ -1382,6 +1377,65 @@ int pka_shift_right(pka_handle_t   handle,
     return pka_submit_cmd(handle, user_data, CC_SHIFT_RIGHT, &operands);
 }
 
+static pka_result_code_t pka_internal_subtract(pka_operand_t *value,
+                                               pka_operand_t *subtrahend,
+                                               pka_operand_t *result)
+{
+    uint32_t minuend_byte_len, subtrahend_byte_len, result_byte_len;
+    uint32_t borrow, minuend_byte, subtrahend_byte, result_byte;
+    uint32_t byte_cnt;
+    uint8_t *minuend_ptr, *subtrahend_ptr, *result_ptr;
+
+    minuend_byte_len    = value->actual_len;
+    subtrahend_byte_len = subtrahend->actual_len;
+    result_byte_len     = minuend_byte_len;
+    result->actual_len  = result_byte_len;
+
+    minuend_ptr    = &value->buf_ptr[0];
+    subtrahend_ptr = &subtrahend->buf_ptr[0];
+    result_ptr     = &result->buf_ptr[0];
+
+    // Subtract subtrahend from minued by proceeding from the least significant
+    // bytes to the most significant bytes.
+    borrow = 0;
+    for (byte_cnt = 0; byte_cnt < minuend_byte_len; byte_cnt++)
+    {
+        minuend_byte = *minuend_ptr;
+        if (byte_cnt < subtrahend_byte_len)
+            subtrahend_byte = (*subtrahend_ptr) + borrow;
+        else
+            subtrahend_byte = borrow;
+
+        if (subtrahend_byte <= minuend_byte)
+        {
+            result_byte = minuend_byte - subtrahend_byte;
+            borrow    = 0;
+        }
+        else
+        {
+            result_byte = (256 + minuend_byte) - subtrahend_byte;
+            borrow    = 1;
+        }
+
+        *result_ptr = result_byte;
+        minuend_ptr++;
+        subtrahend_ptr++;
+        result_ptr++;
+    }
+
+    // Finally adjust the actual length by skipping any leading zeros.
+    result_byte_len = result->actual_len;
+    result_ptr      = &result->buf_ptr[result_byte_len - 1];
+    while ((*result_ptr == 0) && (1 <= result_byte_len))
+    {
+        result_ptr--;
+        result_byte_len--;
+    }
+
+    result->actual_len = result_byte_len;
+    return RC_NO_ERROR;
+}
+
 static pka_comparison_t pka_internal_compare(uint8_t *value_buf_ptr,
                                              uint8_t *comparend_buf_ptr,
                                              uint32_t operand_len,
@@ -1694,6 +1748,171 @@ int pka_modular_inverse(pka_handle_t   handle,
     return pka_submit_cmd(handle, user_data, CC_MODULAR_INVERT, &operands);
 }
 
+/// This function, returns 1 if the given value is less than or equal to
+/// the curve prime.  Specifically will return 0 for curve25519 iff the value
+/// is between 2^255 - 19 and 2^255 - 1.  For curve448, it will return 0 iff
+/// the value is between 2^448 - 2^224 - 1 and 2^448 - 1.  Note that it is
+/// exceedingly rare for this function to return 0 on random inputs.
+static int pka_is_mont_ecdh_canonical(ecc_mont_curve_t* curve,
+                                      pka_operand_t*    point_x)
+{
+    pka_comparison_t rc;
+    uint32_t         idx;
+    uint8_t          big_endian, ls_byte, ms_byte;
+
+    big_endian = point_x->big_endian;
+    if (curve->type == PKA_CURVE_25519)
+    {
+        if (point_x->actual_len != 32)
+            return 1;
+
+        // We want to see if point_x (with a special adjustment of the
+        // most significant byte) is < the curve prime.
+        // First do a quick test
+        ls_byte = point_x->buf_ptr[big_endian ? 31 : 0];
+        if (ls_byte < 0xED) // 237 = 256 - 19
+            return 1;
+
+        // Loop over the bytes from least significant to most significant
+        // looking for a byte != 0xFF.  The most signifcant byte is special.
+        if (big_endian)
+        {
+            for (idx = 1; idx <= 30; idx++)
+                if (point_x->buf_ptr[31 - idx] != 0xFF)
+                    return 1;
+
+            ms_byte = point_x->buf_ptr[0];
+        }
+        else
+        {
+            for (idx = 1; idx <= 30; idx++)
+                if (point_x->buf_ptr[idx] != 0xFF)
+                    return 1;
+
+            ms_byte = point_x->buf_ptr[31];
+        }
+
+        ms_byte &= 0x7F;
+        return ms_byte != 0x7F;
+    }
+    else if (curve->type == PKA_CURVE_448)
+    {
+        if (point_x->actual_len != 56)
+            return 1;
+
+        // Quick test *TBD*
+        ms_byte = point_x->buf_ptr[big_endian ? 0 : 55];
+        if (ms_byte != 0xFF)
+            return 1;
+
+        rc = pka_internal_compare(point_x->buf_ptr, curve->p.buf_ptr, 56,
+                                  big_endian);
+        if (rc == PKA_LESS_THAN)
+            return 1;
+
+        return 0;
+    }
+    else
+        return 1;
+}
+
+/// This function will first check if the value is already canonical (by
+/// calling pka_is_mont_ecdh_canonical), and if it is not canonical, it will
+/// do a modular reduction of value by the curve prime.
+static int pka_mont_ecdh_canonicalize(pka_handle_t      handle,
+                                      ecc_mont_curve_t* curve,
+                                      pka_operand_t*    point_x,
+                                      pka_operand_t*    reduced_value)
+{
+    pka_result_code_t rc;
+    pka_operand_t     temp;
+    uint8_t           temp_buf[MAX_ECC_BUF];
+    int               is_canonical;
+
+    is_canonical = pka_is_mont_ecdh_canonical(curve, point_x);
+    if (is_canonical)
+        return -1;
+
+    // Make a local copy of point_x first
+    memcpy(&temp, point_x, sizeof(temp));
+    temp.buf_ptr = &temp_buf[0];
+    memcpy(temp.buf_ptr, point_x->buf_ptr, point_x->actual_len);
+    if (curve->type == PKA_CURVE_25519)
+        temp.buf_ptr[31] &= 0x7F;
+
+    rc = pka_internal_subtract(&temp, &curve->p, reduced_value);
+    if (rc == RC_NO_ERROR)
+        return 0;
+    else
+        return -1;
+}
+
+int pka_mont_ecdh_mult(pka_handle_t      handle,
+                       void*             user_data,
+                       ecc_mont_curve_t* curve,
+                       pka_operand_t*    point_x,
+                       pka_operand_t*    multiplier)
+{
+    pka_local_info_t *local_info;
+    pka_operands_t    operands;
+    pka_operand_t     reduced_point_x;
+    uint32_t          point_x_len, p_len, A_len, k_len;
+    uint8_t           reduced_point_buf[MAX_ECC_BUF];
+    uint8_t           big_endian;
+    int               rc, is_canonical;
+
+    if (!curve || !point_x || !multiplier)
+        return PKA_OPERAND_MISSING;
+
+    if (!curve->p.buf_ptr  || !curve->A.buf_ptr || !multiplier->buf_ptr ||
+          !point_x->buf_ptr)
+        return PKA_OPERAND_BUF_MISSING;
+
+    if ((curve->type != PKA_CURVE_25519) && (curve->type != PKA_CURVE_448))
+        return PKA_CURVE_TYPE_INVALID;
+
+    memset(&operands, 0, sizeof(pka_operands_t));
+    operands.operand_cnt = 4;
+    operands.operands[0] = *multiplier;
+    operands.operands[1] = *point_x;
+    operands.operands[2] = curve->p;
+    operands.operands[3] = curve->A;
+
+    local_info  = (pka_local_info_t *) handle;
+    big_endian  = local_info->gbl_info->rings_byte_order;
+    k_len       = pka_process_operand(&operands.operands[0], big_endian);
+    point_x_len = pka_process_operand(&operands.operands[1], big_endian);
+    p_len       = pka_process_operand(&operands.operands[2], big_endian);
+    A_len       = pka_process_operand(&operands.operands[3], big_endian);
+
+    if ((point_x_len == 0) || (p_len == 0) ||
+          (A_len       == 0) || (k_len == 0))
+        return PKA_OPERAND_LEN_ZERO;
+
+    is_canonical = pka_is_mont_ecdh_canonical(curve, point_x);
+    if (!is_canonical)
+    {
+        memset(&reduced_point_x,      0, sizeof(pka_operand_t));
+        memset(&reduced_point_buf[0], 0, MAX_ECC_BUF);
+        reduced_point_x.buf_len      = MAX_ECC_BUF;
+        reduced_point_x.actual_len   = 0;
+        reduced_point_x.is_encrypted = 0;
+        reduced_point_x.big_endian   = 0;
+        reduced_point_x.buf_ptr      = &reduced_point_buf[0];
+
+        rc = pka_mont_ecdh_canonicalize(handle, curve, point_x,
+                                        &reduced_point_x);
+        if (rc == 0)
+            operands.operands[1] = reduced_point_x;
+    }
+
+    // We could check that point is "on" the given curve, but that is deemed
+    // too expensive for now.
+
+    return pka_submit_cmd(handle, user_data, CC_MONT_ECDH_MULTIPLY,
+                          &operands);
+}
+
 int pka_ecc_pt_add(pka_handle_t   handle,
                    void          *user_data,
                    ecc_curve_t   *curve,
@@ -1794,13 +2013,22 @@ int pka_ecc_pt_mult(pka_handle_t   handle,
     return pka_submit_cmd(handle, user_data, CC_ECC_PT_MULTIPLY, &operands);
 }
 
+int pka_mont_ecdh(pka_handle_t      handle,
+                  void*             user_data,
+                  ecc_mont_curve_t* curve,
+                  pka_operand_t*    point_x,
+                  pka_operand_t*    private_key)
+{
+    return pka_mont_ecdh_mult(handle, user_data, curve, point_x, private_key);
+}
+
 int pka_ecdh(pka_handle_t   handle,
              void*          user_data,
              ecc_curve_t   *curve,
              ecc_point_t   *point,
              pka_operand_t *private_key)
 {
-	return pka_ecc_pt_mult(handle, user_data, curve, point, private_key);
+    return pka_ecc_pt_mult(handle, user_data, curve, point, private_key);
 }
 
 int pka_ecdsa_signature_generate(pka_handle_t   handle,
