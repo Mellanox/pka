@@ -57,19 +57,10 @@ void engine_load_pka_int(void);
 static int engine_pka_bn_mod_exp(BIGNUM *r, const BIGNUM *a, const BIGNUM *p,
                                  const BIGNUM *m, BN_CTX *ctx, BN_MONT_CTX *m_ctx);
 
-/* DSA stuff */
-#ifndef NO_DSA
-static int engine_pka_dsa_init(DSA *dsa);
-static int engine_pka_dsa_finish(DSA *dsa);
-#endif
-
 /* RSA stuff */
 #ifndef NO_RSA
 static int engine_pka_rsa_mod_exp(BIGNUM *r0, const BIGNUM *I, RSA *rsa,
                                     BN_CTX *ctx);
-
-static int engine_pka_rsa_init(RSA *rsa);
-static int engine_pka_rsa_finish(RSA *rsa);
 #endif
 
 /* DH stuff */
@@ -77,8 +68,6 @@ static int engine_pka_rsa_finish(RSA *rsa);
 static int engine_pka_dh_bn_mod_exp(const DH *dh, BIGNUM *r, const BIGNUM *a,
                                     const BIGNUM *p, const BIGNUM *m,
                                     BN_CTX *ctx, BN_MONT_CTX *m_ctx);
-static int engine_pka_dh_init(DH *dh);
-static int engine_pka_dh_finish(DH *dh);
 #endif
 
 /* RAND stuff */
@@ -266,8 +255,8 @@ static RSA_METHOD pka_rsa_meth = {
     NULL,
     engine_pka_rsa_mod_exp,
     engine_pka_bn_mod_exp,
-    engine_pka_rsa_init,
-    engine_pka_rsa_finish,
+    NULL,
+    NULL,
     0,
     NULL,
     NULL,
@@ -292,8 +281,8 @@ static DSA_METHOD pka_dsa_meth = {
     NULL,
     engine_pka_dsa_mod_exp,
     engine_pka_dsa_bn_mod_exp,
-    engine_pka_dsa_init,
-    engine_pka_dsa_finish,
+    NULL,
+    NULL,
     0,
     NULL,
     NULL,
@@ -308,8 +297,8 @@ static DH_METHOD pka_dh_meth = {
     NULL,
     NULL,
     engine_pka_dh_bn_mod_exp,
-    engine_pka_dh_init,
-    engine_pka_dh_finish,
+    NULL,
+    NULL,
     0,
     NULL,
     NULL
@@ -328,9 +317,7 @@ static int bind_pka(ENGINE *e)
     /* Setup our RSA_METHOD that we provide pointers to */
     if ((pka_rsa_meth = RSA_meth_new("BlueField RSA method", 0)) == NULL
         || rc != RSA_meth_set_mod_exp(pka_rsa_meth, engine_pka_rsa_mod_exp)
-        || rc != RSA_meth_set_bn_mod_exp(pka_rsa_meth, engine_pka_bn_mod_exp)
-        || rc != RSA_meth_set_init(pka_rsa_meth, engine_pka_rsa_init)
-        || rc != RSA_meth_set_finish(pka_rsa_meth, engine_pka_rsa_finish))
+        || rc != RSA_meth_set_bn_mod_exp(pka_rsa_meth, engine_pka_bn_mod_exp))
     {
         printf("ERROR: failed to setup BlueField RSA method\n");
         return 0;
@@ -357,9 +344,8 @@ static int bind_pka(ENGINE *e)
     /* Setup our DSA_METHOD that we provide pointers to */
     if ((pka_dsa_meth = DSA_meth_new("BlueField DSA method", 0)) == NULL
         || rc != DSA_meth_set_mod_exp(pka_dsa_meth, engine_pka_dsa_mod_exp)
-        || rc != DSA_meth_set_bn_mod_exp(pka_dsa_meth, engine_pka_dsa_bn_mod_exp)
-        || rc != DSA_meth_set_init(pka_dsa_meth, engine_pka_dsa_init)
-        || rc != DSA_meth_set_finish(pka_dsa_meth, engine_pka_dsa_finish))
+        || rc != DSA_meth_set_bn_mod_exp(pka_dsa_meth,
+                                         engine_pka_dsa_bn_mod_exp))
     {
         printf("ERROR: failed to setup BlueField DSA method\n");
         return 0;
@@ -379,9 +365,7 @@ static int bind_pka(ENGINE *e)
 #ifndef NO_DH
     /* Setup our DH_METHOD that we provide pointers to */
     if ((pka_dh_meth = DH_meth_new("BlueField DH method", 0)) == NULL
-        || rc != DH_meth_set_bn_mod_exp(pka_dh_meth, engine_pka_dh_bn_mod_exp)
-        || rc != DH_meth_set_init(pka_dh_meth, engine_pka_dh_init)
-        || rc != DH_meth_set_finish(pka_dh_meth, engine_pka_dh_finish))
+        || rc != DH_meth_set_bn_mod_exp(pka_dh_meth, engine_pka_dh_bn_mod_exp))
     {
         printf("ERROR: failed to setup BlueField DH method\n");
         return 0;
@@ -827,15 +811,6 @@ end:
     return rc;
 }
 
-static int engine_pka_rsa_init(RSA *rsa)
-{
-    return pka_init();
-}
-
-static int engine_pka_rsa_finish(RSA *rsa)
-{
-    return pka_finish();
-}
 #endif
 
 #ifndef NO_DSA
@@ -890,15 +865,6 @@ static int engine_pka_dsa_mod_exp(DSA *dsa, BIGNUM *rr, BIGNUM *a1,
     return rc;
 }
 
-static int engine_pka_dsa_init(DSA *dsa)
-{
-    return pka_init();
-}
-
-static int engine_pka_dsa_finish(DSA *dsa)
-{
-    return pka_finish();
-}
 #endif
 
 #ifndef NO_DH
@@ -910,15 +876,6 @@ engine_pka_dh_bn_mod_exp(const DH *dh, BIGNUM *r, const BIGNUM *a, const BIGNUM 
     return engine_pka_bn_mod_exp(r, a, p, m, ctx, m_ctx);
 }
 
-static int engine_pka_dh_init(DH *dh)
-{
-    return pka_init();
-}
-
-static int engine_pka_dh_finish(DH *dh)
-{
-    return pka_finish();
-}
 #endif
 
 #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
@@ -1034,7 +991,7 @@ engine_pka_X25519_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen)
         return 0;
     }
 
-    if (engine_pka_keypair_invalid(peerkey, NID_X25519, 1))
+    if (engine_pka_keypair_invalid(peerkey, NID_X25519, 0))
     {
         printf("ERROR: %s: peerkey is invalid\n", __func__);
         return 0;
@@ -1109,7 +1066,7 @@ engine_pka_X448_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen)
         return 0;
     }
 
-    if (engine_pka_keypair_invalid(peerkey, NID_X448, 1))
+    if (engine_pka_keypair_invalid(peerkey, NID_X448, 0))
     {
         printf("ERROR: %s: peerkey is invalid\n", __func__);
         return 0;
