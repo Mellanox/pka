@@ -109,15 +109,6 @@ typedef struct {
     bool           valid;
 } pka_engine_info_t;
 
-struct pka_keypair {
-    pka_operand_t private_key;
-    pka_operand_t public_key;
-    int nid;
-    bool has_private;
-};
-
-typedef struct pka_keypair ENGINE_PKA_KEYPAIR;
-
 struct engine_pka_nid_data_st
 {
     const char *name;
@@ -134,6 +125,16 @@ int pka_init(void);
 // function is not thread-safe.
 int pka_finish(void);
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
+struct pka_keypair {
+    pka_operand_t private_key;
+    pka_operand_t public_key;
+    int nid;
+    bool has_private;
+};
+
+typedef struct pka_keypair ENGINE_PKA_KEYPAIR;
+
 // This function allocates the memory resources required to store public and
 // private key pairs of size @size.
 // Note: @flag is currently not useful but is reserved for future when
@@ -143,6 +144,7 @@ ENGINE_PKA_KEYPAIR *engine_pka_keypair_new(int nid, int flag, int size);
 // This function releases all the memory resources allocated for
 // public and private key pair.
 int engine_pka_keypair_free(ENGINE_PKA_KEYPAIR *kpair);
+#endif
 
 // This function implements the modular exponentiation using BlueField
 // PKA hardware.
