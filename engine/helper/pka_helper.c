@@ -173,6 +173,7 @@ static uint32_t gbl_engine_finish;
         PKA_PRINT(PKA_ENGINE, fmt_and_args);    \
 })
 
+#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 ENGINE_PKA_KEYPAIR *engine_pka_keypair_new(int nid, int flag, int size)
 {
     ENGINE_PKA_KEYPAIR *kpair = NULL;
@@ -255,6 +256,7 @@ int engine_pka_keypair_free(ENGINE_PKA_KEYPAIR *kpair)
 
     return 1;
 }
+#endif
 
 
 static void byte_swap_copy(uint8_t *dest, uint8_t *src, uint32_t len)
