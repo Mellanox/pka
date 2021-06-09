@@ -716,7 +716,6 @@ static int pka_dev_create_shim(pka_dev_shim_t *shim, uint32_t shim_id,
     if (!shim->rings)
     {
         PKA_ERROR(PKA_DEV, "unable to kmalloc\n");
-        kfree(shim->rings);
         return -ENOMEM;
     }
 
