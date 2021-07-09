@@ -292,12 +292,12 @@ typedef struct
 int pka_ring_lookup(pka_ring_info_t rings[],
                     uint32_t        req_rings_num,
                     uint8_t         byte_order,
-                    uint32_t        *mask,
+                    uint8_t         mask[],
                     uint32_t        *cnt);
 
 /// Free a set of assigned rings, referred by their number (cnt), their mask.
 /// It returns 0 on success, a negative error code on failure.
-int pka_ring_free(pka_ring_info_t rings[], uint32_t *mask, uint32_t *cnt);
+int pka_ring_free(pka_ring_info_t rings[], uint8_t mask[], uint32_t *cnt);
 
 /// Returns the number of available of rooms to append a command descriptors
 /// within a given ring.

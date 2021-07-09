@@ -220,8 +220,8 @@ uint32_t pka_get_rings_count(pka_instance_t instance);
 ///
 /// @param instance     A PK instance handle.
 ///
-/// @return             The bitmask of allocated HW rings.
-uint32_t pka_get_rings_bitmask(pka_instance_t instance);
+/// @return             The bitmask(array of uint8_t) of allocated HW rings.
+uint8_t* pka_get_rings_bitmask(pka_instance_t instance);
 
 /// Thread local PKA initialization. All threads must call this function before
 /// calling any other PKA API functions. The instance parameter specifies which

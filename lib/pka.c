@@ -267,7 +267,7 @@ pka_instance_t pka_init_global(const char *name,
                             pka_get_rings_byte_order(PKA_HANDLE_INVALID);
     ret = pka_ring_lookup(pka_gbl_info->rings, ring_cnt,
                           pka_gbl_info->rings_byte_order,
-                          &pka_gbl_info->rings_mask,
+                          pka_gbl_info->rings_mask,
                           &pka_gbl_info->rings_cnt);
     if (ret)
     {
@@ -314,8 +314,8 @@ void pka_term_global(pka_instance_t instance)
                                         "longer usable\n");
 
         PKA_DEBUG(PKA_USER, "release PKA rings\n");
-        pka_ring_free(pka_gbl_info->rings, &pka_gbl_info->rings_mask,
-                        &pka_gbl_info->rings_cnt);
+        pka_ring_free(pka_gbl_info->rings, pka_gbl_info->rings_mask,
+                      &pka_gbl_info->rings_cnt);
 
         free(pka_gbl_info);
         pka_gbl_info = NULL;
@@ -383,7 +383,7 @@ uint32_t pka_get_rings_count(pka_instance_t instance)
     return 0;
 }
 
-uint32_t pka_get_rings_bitmask(pka_instance_t instance)
+uint8_t* pka_get_rings_bitmask(pka_instance_t instance)
 {
     if (instance == (pka_instance_t) pka_gbl_info->main_pid)
         return pka_gbl_info->rings_mask;

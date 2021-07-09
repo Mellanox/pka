@@ -139,14 +139,14 @@ static void pka_ring_reset_mem(pka_ring_info_t *ring)
 int pka_ring_lookup(pka_ring_info_t rings[],
                     uint32_t        req_rings_num,
                     uint8_t         byte_order,
-                    uint32_t       *mask,
+                    uint8_t         mask[],
                     uint32_t       *cnt)
 {
     pka_ring_info_t *ring;
     uint32_t         ring_idx;
+    uint8_t          mask_idx, mask_bit;
     int              container;
 
-    *mask = 0;
     *cnt  = 0;
 
     if (!req_rings_num)
@@ -177,6 +177,9 @@ int pka_ring_lookup(pka_ring_info_t rings[],
         close(container);
         return -EFAULT;
     }
+
+    // Clear HW rings bitmask
+    memset(mask, 0, PKA_RING_NUM_BITMASK * sizeof(*mask));
 
     // Lookup for available ring.
     for (ring_idx = 0; ring_idx < req_rings_num; ring_idx++)
@@ -221,8 +224,11 @@ int pka_ring_lookup(pka_ring_info_t rings[],
 
         ring->idx        = ring_idx;
         ring->big_endian = byte_order;
+
         // Set ring bit in mask
-        *mask     |= 1 << ring->ring_id;
+        mask_idx = ring->ring_id / 8;
+        mask_bit = ring->ring_id % 8;
+        mask[mask_idx] |= 1 << mask_bit;
         *cnt      += 1;
     }
 
@@ -250,9 +256,10 @@ static int pka_ring_put(pka_ring_info_t *ring, uint32_t cnt)
 }
 
 // Free the set of assigned rings.
-int pka_ring_free(pka_ring_info_t rings[], uint32_t *mask, uint32_t *cnt)
+int pka_ring_free(pka_ring_info_t rings[], uint8_t mask[], uint32_t *cnt)
 {
     pka_ring_info_t *ring;
+    uint8_t          mask_idx, mask_bit;
     uint32_t         ring_idx = 0;
 
     if (!rings)
@@ -263,7 +270,9 @@ int pka_ring_free(pka_ring_info_t rings[], uint32_t *mask, uint32_t *cnt)
         ring  = &rings[ring_idx];
 
         // Reset ring bit in mask (or toggle the bit i ^= (1 << bit))
-        *mask &= ~(1 << ring->ring_id);
+        mask_idx = ring->ring_id / 8;
+        mask_bit = ring->ring_id % 8;
+        mask[mask_idx] &= ~(1 << mask_bit);
         *cnt  -= 1;
 
         // Clear memory content.
