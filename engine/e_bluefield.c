@@ -591,15 +591,31 @@ static int engine_pka_destroy(ENGINE *e)
 {
 #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 #ifndef NO_RSA
-    RSA_meth_free(pka_rsa_meth);
+    if (pka_rsa_meth)
+    {
+        RSA_meth_free(pka_rsa_meth);
+        pka_rsa_meth = NULL;
+    }
 #endif
 #ifndef NO_DSA
-    DSA_meth_free(pka_dsa_meth);
+    if (pka_dsa_meth)
+    {
+        DSA_meth_free(pka_dsa_meth);
+        pka_dsa_meth = NULL;
+    }
 #endif
 #ifndef NO_DH
-    DH_meth_free(pka_dh_meth);
+    if (pka_dh_meth)
+    {
+        DH_meth_free(pka_dh_meth);
+        pka_dh_meth = NULL;
+    }
 #ifndef NO_EC
-    EC_KEY_METHOD_free(pka_ec_key_meth);
+    if (pka_ec_key_meth)
+    {
+        EC_KEY_METHOD_free(pka_ec_key_meth);
+        pka_ec_key_meth = NULL;
+    }
 #endif
 #endif
 #endif
