@@ -1,5 +1,5 @@
 Name: libpka
-Version: 1.3
+Version: 1.4
 Release: 1%{?dist}
 Summary: Mellanox BlueField Public Key Acceleration (PKA) Package
 
