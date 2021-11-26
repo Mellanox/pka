@@ -1,3 +1,20 @@
+libpka (1.4-1) UNRELEASED; urgency=low
+
+  * Guard against multiple calls to engine destroy function.
+  * BF3/Mustang updates.
+  * Bug fixes.
+  * Update firmware image and hence add support for curve 448 and curve 25519.
+  * Enable DRBG block in TRNG.
+  * Add tests for TRNG (True Random Number Generator) validation.
+  * Support OpenSSL 3.0 when built with backward compatibility for OpenSSL
+    1.1.0
+  * Shared memory created for multiple libpka instances is useless and hence
+    remove it.
+  * Instead of static addresses, read the address from ACPI table.
+  * Fix ring open issue; don't try ring open when rings are busy.
+  * Create missing openssl dynamic engine symlink for rpm package.
+
+ -- Mahantesh Salimath <mahantesh@nvidia.com>  Fri, 26 Nov 2021 21:13:58 +0000
 libpka (1.3-1) UNRELEASED; urgency=low
 
   * Update documentation.
