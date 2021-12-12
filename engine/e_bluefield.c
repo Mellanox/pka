@@ -163,8 +163,6 @@ struct engine_pka_nid_data_st engine_pka_nid_data[] = {
       pka_mont_448_derive_pubkey },
 };
 
-/* reference count to handle OpenSSL destroy of pka methods */
-static int refcount = 0;
 
 static EVP_PKEY_METHOD *engine_pka_pmeth_X25519 = NULL;
 static EVP_PKEY_METHOD *engine_pka_pmeth_X448 = NULL;
@@ -492,9 +490,6 @@ static int bind_pka(ENGINE *e)
         return 0;
     }
 
-    /* refcount is only used for EC functions */
-    refcount += 1;
-
     if (!ENGINE_set_pkey_meths(e, engine_pka_pkey_meths))
     {
         printf("ERROR: %s: Set PKEY methods failed\n", __func__);
@@ -595,15 +590,6 @@ static int engine_pka_finish(ENGINE *e)
 static int engine_pka_destroy(ENGINE *e)
 {
 #if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
-#ifndef NO_EC
-    refcount -= 1;
-    if (refcount > 0)
-    {
-        /* Workaround OpenSSL multiple destroy bug */
-        engine_pka_register_methods();
-    }
-#endif
-
 #ifndef NO_RSA
     if (pka_rsa_meth)
     {
