@@ -1,5 +1,6 @@
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -7019,6 +7020,19 @@ pka_status_t get_rand_bytes(pka_handle_t  handle,
             return FAILURE;
         close(fd);
         return SUCCESS;
+    }
+    else
+    {
+        if (errno == EACCES)
+        {
+            PKA_ERROR(PKA_TESTS,
+                "unpriviliged user, access denied for /dev/hwrng\n");
+        }
+        else
+        {
+            PKA_ERROR(PKA_TESTS,  "failed to open /dev/hwrng\n");
+        }
+        exit(1);
     }
 
     return FAILURE;
