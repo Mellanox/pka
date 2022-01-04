@@ -2292,7 +2292,13 @@ bool pka_dev_has_avail_ring(pka_ring_info_t *ring_info,
     int      ret;
     errors = 0;
 
-    while ((PKA_MAX_NUM_RINGS - errors) >= rings_num)
+    if (rings_num > PKA_MAX_NUM_RINGS)
+    {
+        PKA_DEBUG(PKA_DEV, "Requested rings exceed the max limit\n");
+        return false;
+    }
+
+    while (errors <= PKA_MAX_NUM_RINGS)
     {
         if (next_ring_id == (PKA_MAX_NUM_RINGS - 1))
         {
@@ -2585,7 +2591,7 @@ static int pka_dev_open_ring_vfio(pka_ring_info_t *ring_info)
     ring_prefix = pka_dev_get_ring_prefix(ring_info->ring_id, false);
     if (!ring_prefix)
     {
-        PKA_ERROR(PKA_DEV, "failed to get ring %d device name\n",
+        PKA_DEBUG(PKA_DEV, "failed to get ring %d device name\n",
                     ring_info->ring_id);
         return error;
     }
