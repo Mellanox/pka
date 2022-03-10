@@ -239,7 +239,7 @@ static int pka_dev_set_resource_config(pka_dev_shim_t *shim,
             return -EPERM;
         }
 
-        res_ptr->ioaddr = ioremap_nocache(res_ptr->base, res_ptr->size);
+        res_ptr->ioaddr = ioremap(res_ptr->base, res_ptr->size);
     }
 
     res_ptr->status = PKA_DEV_RES_STATUS_MAPPED;
