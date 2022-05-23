@@ -344,7 +344,7 @@ pka_handle_t pka_init_local(pka_instance_t instance)
         return PKA_HANDLE_INVALID;
     }
 
-    local_info = calloc(sizeof(*local_info), 0);
+    local_info = calloc(sizeof(*local_info), 1);
     if (!local_info)
     {
         pka_atomic32_dec(&pka_gbl_info->workers_cnt);
