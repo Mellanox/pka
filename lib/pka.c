@@ -52,6 +52,8 @@
 
 #define PKA_INVALID_OPERANDS    0x0
 
+uint64_t cpu_f_hz;
+
 // Start statistics counters. Returns the command number associated with
 // a statistic entry.
 static __pka_inline uint32_t pka_stats_start_cycles_cnt(uint32_t queue_num)
