@@ -97,7 +97,7 @@ static inline uint64_t pka_early_cpu_speed(void)
 #define MAX_CLOCK_CYCLES     UINT64_MAX
 
 /// Global variable holding the cpu frequency.
-uint64_t cpu_f_hz;
+extern uint64_t cpu_f_hz;
 
 static __pka_inline uint64_t pka_get_hz_ticks(void)
 {
