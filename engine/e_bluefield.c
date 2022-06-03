@@ -1543,7 +1543,6 @@ static int engine_pka_gen_pub_decode(int nid, EVP_PKEY *pkey, X509_PUBKEY *pubke
 }
 
 #if (OPENSSL_VERSION_MAJOR == 3)
-#error
 #define DECLARE_PKA_CONCRETE_FUNCTIONS(___NAME,___NID,___STRING) \
     static int engine_pka_##___NAME##_ctrl(EVP_PKEY *pkey, int op, long arg1, void *arg2) { return engine_pka_gen_ctrl(___NID,pkey,op,arg1,arg2); }; \
     static int engine_pka_##___NAME##_priv_encode(PKCS8_PRIV_KEY_INFO *p8, const EVP_PKEY *pkey) { return engine_pka_gen_priv_encode(___NID,p8,pkey); }; \
