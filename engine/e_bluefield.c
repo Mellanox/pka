@@ -1487,7 +1487,11 @@ static int engine_pka_gen_pub_encode(int nid, X509_PUBKEY *pk, const EVP_PKEY *p
     return 1;
 }
 
+#if (OPENSSL_VERSION_MAJOR == 3)
+static int engine_pka_gen_pub_decode(int nid, EVP_PKEY *pkey, const X509_PUBKEY *pubkey)
+#else
 static int engine_pka_gen_pub_decode(int nid, EVP_PKEY *pkey, X509_PUBKEY *pubkey)
+#endif
 {
     const unsigned char *p;
     int pklen;
@@ -1538,6 +1542,17 @@ static int engine_pka_gen_pub_decode(int nid, EVP_PKEY *pkey, X509_PUBKEY *pubke
     return 1;
 }
 
+#if (OPENSSL_VERSION_MAJOR == 3)
+#error
+#define DECLARE_PKA_CONCRETE_FUNCTIONS(___NAME,___NID,___STRING) \
+    static int engine_pka_##___NAME##_ctrl(EVP_PKEY *pkey, int op, long arg1, void *arg2) { return engine_pka_gen_ctrl(___NID,pkey,op,arg1,arg2); }; \
+    static int engine_pka_##___NAME##_priv_encode(PKCS8_PRIV_KEY_INFO *p8, const EVP_PKEY *pkey) { return engine_pka_gen_priv_encode(___NID,p8,pkey); }; \
+    static int engine_pka_##___NAME##_priv_decode(EVP_PKEY *pkey, RC_CONST PKCS8_PRIV_KEY_INFO *p8) { return engine_pka_gen_priv_decode(___NID,pkey,p8); }; \
+    static int engine_pka_##___NAME##_priv_print(BIO *bp, const EVP_PKEY *pkey, int indent, ASN1_PCTX *ctx) { return engine_pka_gen_priv_print(bp,pkey,indent,ctx); }; \
+    static int engine_pka_##___NAME##_pub_encode(X509_PUBKEY *pk, const EVP_PKEY *pkey) { return engine_pka_gen_pub_encode(___NID,pk,pkey); }; \
+    static int engine_pka_##___NAME##_pub_decode(EVP_PKEY *pkey, const X509_PUBKEY *pubkey) { return engine_pka_gen_pub_decode(___NID,pkey,pubkey); }; \
+    static int engine_pka_##___NAME##_pub_print(BIO *bp, const EVP_PKEY *pkey, int indent, ASN1_PCTX *ctx) { return engine_pka_gen_pub_print(bp,pkey,indent,ctx); };
+#else
 #define DECLARE_PKA_CONCRETE_FUNCTIONS(___NAME,___NID,___STRING) \
     static int engine_pka_##___NAME##_ctrl(EVP_PKEY *pkey, int op, long arg1, void *arg2) { return engine_pka_gen_ctrl(___NID,pkey,op,arg1,arg2); }; \
     static int engine_pka_##___NAME##_priv_encode(PKCS8_PRIV_KEY_INFO *p8, const EVP_PKEY *pkey) { return engine_pka_gen_priv_encode(___NID,p8,pkey); }; \
@@ -1546,6 +1561,7 @@ static int engine_pka_gen_pub_decode(int nid, EVP_PKEY *pkey, X509_PUBKEY *pubke
     static int engine_pka_##___NAME##_pub_encode(X509_PUBKEY *pk, const EVP_PKEY *pkey) { return engine_pka_gen_pub_encode(___NID,pk,pkey); }; \
     static int engine_pka_##___NAME##_pub_decode(EVP_PKEY *pkey, X509_PUBKEY *pubkey) { return engine_pka_gen_pub_decode(___NID,pkey,pubkey); }; \
     static int engine_pka_##___NAME##_pub_print(BIO *bp, const EVP_PKEY *pkey, int indent, ASN1_PCTX *ctx) { return engine_pka_gen_pub_print(bp,pkey,indent,ctx); };
+#endif
 
 DECLARE_PKA_CONCRETE_FUNCTIONS(X25519, NID_X25519, (OBJ_nid2sn(NID_X25519)) );
 DECLARE_PKA_CONCRETE_FUNCTIONS(X448, NID_X448, (OBJ_nid2sn(NID_X448)) );

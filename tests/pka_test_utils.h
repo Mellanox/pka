@@ -16,9 +16,6 @@
             PKA_PRINT(PKA_TEST, fmt_and_args); \
     })
 
-ecc_mont_curve_t curve25519;
-ecc_mont_curve_t curve448;
-
 typedef struct
 {
     pka_operand_t *quotient;

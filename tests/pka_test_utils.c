@@ -13,6 +13,9 @@
 
 static uint8_t RSA_VERIFY_EXPON[] = { 0x01, 0x00, 0x01 };
 
+ecc_mont_curve_t curve25519;
+ecc_mont_curve_t curve448;
+ 
 // All of the following constants are in big-endian format.
 
 //static char P256_p_string[] =
