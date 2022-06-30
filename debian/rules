@@ -1,5 +1,11 @@
 #!/usr/bin/make -f
 
+ifneq (,$(findstring $(shell openssl version), "OpenSSL 3.0"))
+        OPENSSL_ENGINES_DIR=$(OPENSSL_ENGINES_DIR)
+else
+        OPENSSL_ENGINES_DIR=engines-3
+endif
+
 export CFLAGS=-g -O2 -fdebug-prefix-map=/root=. -fstack-protector-strong -Wformat -Werror=format-security
 export CPPFLAGS=-Wdate-time -D_FORTIFY_SOURCE=2
 export CXXFLAGS=-g -O2 -fdebug-prefix-map=/root=. -fstack-protector-strong -Wformat -Werror=format-security
@@ -22,6 +28,6 @@ override_dh_auto_install:
 	mv debian/libpka1/usr/share/doc/pka/* debian/libpka1/usr/share/doc/libpka1/
 	rmdir debian/libpka1/usr/share/doc/pka/
 	rm debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/*.la
-	mkdir -p debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1
-	cp debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/libbfengine.so.1.1.0 debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1
-	dh_link /usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1/libbfengine.so.1.1.0 /usr/lib/${DEB_TARGET_GNU_TYPE}/engines-1.1/pka.so
+	mkdir -p debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/$(OPENSSL_ENGINES_DIR)
+	cp debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/libbfengine.so.1.1.0 debian/libpka1/usr/lib/${DEB_TARGET_GNU_TYPE}/$(OPENSSL_ENGINES_DIR)
+	dh_link /usr/lib/${DEB_TARGET_GNU_TYPE}/$(OPENSSL_ENGINES_DIR)/libbfengine.so.1.1.0 /usr/lib/${DEB_TARGET_GNU_TYPE}/$(OPENSSL_ENGINES_DIR)/pka.so
