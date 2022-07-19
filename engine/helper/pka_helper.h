@@ -125,7 +125,6 @@ int pka_init(void);
 // function is not thread-safe.
 int pka_finish(void);
 
-#if (OPENSSL_VERSION_NUMBER >= 0x10100000L)
 struct pka_keypair {
     pka_operand_t private_key;
     pka_operand_t public_key;
@@ -144,7 +143,6 @@ ENGINE_PKA_KEYPAIR *engine_pka_keypair_new(int nid, int flag, int size);
 // This function releases all the memory resources allocated for
 // public and private key pair.
 int engine_pka_keypair_free(ENGINE_PKA_KEYPAIR *kpair);
-#endif
 
 // This function implements the modular exponentiation using BlueField
 // PKA hardware.
