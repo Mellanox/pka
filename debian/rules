@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-ifeq (,$(findstring $(shell openssl version), "OpenSSL 3.0"))
+ifeq (,$(findstring OpenSSL 3.0, $(shell openssl version)))
         OPENSSL_ENGINES_DIR=engines-1.1
 else
         OPENSSL_ENGINES_DIR=engines-3
