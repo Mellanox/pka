@@ -36,6 +36,8 @@
 
 #include "pka_helper.h"
 
+static int pka_init_engine(void);
+
 #define return_if_instance_invalid(inst)                    \
 ({                                                          \
     if ((inst) == PKA_INSTANCE_INVALID || (inst) ==0)       \
@@ -49,8 +51,11 @@
 ({                                                          \
     if ((hdl) == PKA_HANDLE_INVALID || (hdl) == 0)          \
     {                                                       \
-        DEBUG(PKA_D_ERROR, "PKA handle is invalid\n");      \
-        return 0;                                           \
+        if ( 1 != pka_init_engine() )                       \
+        {                                                   \
+            DEBUG(PKA_D_ERROR, "PKA handle is invalid\n");  \
+            return 0;                                       \
+        }                                                   \
     }                                                       \
 })
 
