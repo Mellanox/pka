@@ -2283,6 +2283,22 @@ int pka_dsa_signature_verify(pka_handle_t     handle,
         return pka_submit_cmd(handle, user_data, CC_DSA_VERIFY, &operands);
 }
 
+int sw_get_rand_bytes(uint8_t *buf, uint32_t len)
+{
+    static char letters[94] = "abcdefghijklmnopqrstuvwxyz"
+                              "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                              "1234567890-=`~!@#$%^&*()_+"
+                              "[];',./{}:<>?| ";
+    int index;
+
+    for (int i = 0; i < len; ++i)
+    {
+        index = rand() % 95;
+        *(buf+i) = letters[index];
+    }
+    return 0;
+}
+
 int pka_get_rand_bytes(pka_handle_t  handle,
                        uint8_t      *buf,
                        uint32_t      buf_len)
@@ -2290,7 +2306,7 @@ int pka_get_rand_bytes(pka_handle_t  handle,
     pka_global_info_t   *gbl_info;
     pka_local_info_t    *local_info;
     pka_ring_info_t     *ring_info;
-    pka_dev_trng_info_t  trng_info;
+//  pka_dev_trng_info_t  trng_info;
     uint8_t              ring_idx;
     int                  ret;
 
@@ -2299,8 +2315,8 @@ int pka_get_rand_bytes(pka_handle_t  handle,
 
     local_info      = (pka_local_info_t *)handle;
     gbl_info        = local_info->gbl_info;
-    trng_info.data  = buf;
-    trng_info.count = buf_len;
+//  trng_info.data  = buf;
+//  trng_info.count = buf_len;
 
     for (ring_idx = 0; ring_idx < gbl_info->rings_cnt; ring_idx++)
     {
@@ -2309,7 +2325,9 @@ int pka_get_rand_bytes(pka_handle_t  handle,
         if (!ring_info)
             continue;
 
-        ret = ioctl(ring_info->fd, PKA_GET_RANDOM_BYTES, &trng_info);
+        //ret = ioctl(ring_info->fd, PKA_GET_RANDOM_BYTES, &trng_info);
+        // Due to BF3 addressing issue, use software generator for now.
+        ret = sw_get_rand_bytes(buf, buf_len);
         if (!ret)
             return buf_len;
 
