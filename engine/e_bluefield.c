@@ -42,6 +42,10 @@
 # error "Only OpenSSL >= 1.0 is supported"
 #endif
 
+#ifdef OPENSSL_VERSION_TEXT
+#ident OPENSSL_VERSION_TEXT
+#endif
+
 #ifdef BLUEFIELD_DYNAMIC_ENGINE
 /* Engine id and name */
 static const char *engine_pka_id = "pka";
