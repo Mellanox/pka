@@ -51,7 +51,7 @@
 #define PKA_DEFAULT_NAME         "default"
 #define PKA_DEFAULT_SIZE         (16 * MEGABYTE) // 16 MB
 
-#define PKA_MAX_QUEUES_NUM        16
+#define PKA_MAX_QUEUES_NUM        48
 
 typedef struct
 {
