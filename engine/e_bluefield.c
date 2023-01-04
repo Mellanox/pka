@@ -1814,8 +1814,8 @@ engine_pka_ecc_pt_mult(const EC_GROUP *group, EC_POINT *r, const BIGNUM *scalar,
         // Exit if operation failed.
         if (!rc)
         {
-            printf("\n ERROR: pka_ecc_pt_mult:"
-                              "Operation failed.\n");
+            //printf("\n ERROR: pka_ecc_pt_mult:"
+            //                  "Operation failed.\n");
             goto end;
         }
 
@@ -1904,8 +1904,8 @@ engine_pka_ecc_pt_mult(const EC_GROUP *group, EC_POINT *r, const BIGNUM *scalar,
             // Exit if any of the above operations failed.
             if (!rc)
             {
-                printf("\n ERROR: pka_ecc_pt_mult:"
-                                  "Operation failed.\n");
+                //printf("\n ERROR: pka_ecc_pt_mult:"
+                //                  "Operation failed.\n");
                 goto end;
             }
 
