@@ -772,7 +772,14 @@ static pka_operand_t *pka_do_mod_exp_crt(pka_handle_t   handle,
 
     if (SUCCESS != rc)
     {
-        DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc=%d\n", rc);
+        if ( PKA_OPERAND_LEN_TOO_LONG == rc )
+        {
+            DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc=%d "
+                     "Key length reaches PKA hardware limitations\n", rc);
+        } else
+        {
+            DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc=%d\n", rc);
+        }
 #ifdef VERBOSE_MODE
         print_operand("  value   =", value, "\n");
         print_operand("  p       =", p,     "\n");
