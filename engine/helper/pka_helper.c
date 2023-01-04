@@ -657,7 +657,14 @@ static ecc_point_t *results_to_ecc_point(pka_handle_t handle)
     pka_wait_for_results(handle, &results);
     if (results.status != RC_NO_ERROR)
     {
-        PKA_ERROR(PKA_TESTS, "pka_get_result status=0x%x\n", results.status);
+        if ( RC_ECC_RESULT_OFF_CURVE == results.status )
+        {
+            PKA_ERROR(PKA_TESTS, "pka_get_result status=0x%x Key length "
+                          "reaches PKA hardware limitations\n" , results.status);
+        } else 
+        {
+            PKA_ERROR(PKA_TESTS, "pka_get_result status=0x%x\n", results.status);
+        }
         return NULL;
     }
 
@@ -732,7 +739,14 @@ static pka_operand_t *pka_do_mod_exp(pka_handle_t   handle,
 
     if (SUCCESS != rc)
     {
-        DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc=%d\n", rc);
+        if ( PKA_OPERAND_LEN_TOO_LONG == rc )
+        {
+            DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc=%d "
+                 "Key length reaches PKA hardware limitations\n", rc);
+        } else
+        {
+            DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc=%d\n", rc);
+        }
 #ifdef VERBOSE_MODE
         print_operand("  value   =", value,    "\n");
         print_operand("  exponent=", exponent, "\n");
