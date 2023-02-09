@@ -953,23 +953,31 @@ static int pka_engine_get_instance(pka_engine_info_t *engine)
     uint32_t        cmd_queue_sz, rslt_queue_sz;
     uint8_t         queue_cnt, ring_cnt, flags;
     
-    FILE *f = fopen("/dev/pka/95", "r");
-
     PKA_ASSERT(engine   != NULL);
 
     if (!engine->valid)
     {
+        FILE *f = fopen("/dev/pka/95", "r");
         // Init the PKA instance before calling anything else
         flags         = PKA_F_PROCESS_MODE_MULTI | PKA_F_SYNC_MODE_ENABLE;
         if ( NULL != f )
         {
-            ring_cnt  = PKA_ENGINE_RING_CNT_BF3;
-            queue_cnt = PKA_ENGINE_QUEUE_CNT_BF3;
+            ring_cnt  = PKA_ENGINE_RING_CNT_BF3_HB;
+            queue_cnt = PKA_ENGINE_QUEUE_CNT_BF3_HB;
             fclose(f);
         } else 
         {
-            ring_cnt  = PKA_ENGINE_RING_CNT;
-            queue_cnt = PKA_ENGINE_QUEUE_CNT;            
+            FILE *f = fopen("/dev/pka/63", "r");
+            if ( NULL != f )
+            {
+                ring_cnt  = PKA_ENGINE_RING_CNT_BF3_MB;
+                queue_cnt = PKA_ENGINE_QUEUE_CNT_BF3_MB;
+                fclose(f);
+	    } else
+	    {
+                ring_cnt  = PKA_ENGINE_RING_CNT;
+                queue_cnt = PKA_ENGINE_QUEUE_CNT;            
+	    }
         }
         cmd_queue_sz  = PKA_MAX_OBJS * PKA_CMD_DESC_MAX_DATA_SIZE;
         rslt_queue_sz = PKA_MAX_OBJS * PKA_RSLT_DESC_MAX_DATA_SIZE;
