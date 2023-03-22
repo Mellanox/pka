@@ -860,7 +860,7 @@ static void ShiftTest(thread_args_t *args,
                       uint32_t       shift_cnt,
                       uint32_t       correct_idx)
 {
-    pka_operand_t       *operand[2], *correct, *result;
+    pka_operand_t       *operand, *correct, *result;
     pka_results_t       results;
     pka_result_code_t   rc;
     pka_cmp_code_t      cmp;
@@ -872,7 +872,7 @@ static void ShiftTest(thread_args_t *args,
     rc = fcn(args->handle, args->user_data, operand, shift_cnt);
     if (rc != RC_NO_ERROR)
     {
-        CmdFailed(args, __func__, pki_fcn_name, &operand, 2, rc);
+        CmdFailed(args, __func__, pki_fcn_name, &operand, 1, rc);
         return;
     }
 
