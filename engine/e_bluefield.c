@@ -1928,7 +1928,7 @@ engine_pka_ecc_pt_mult(const EC_GROUP *group, EC_POINT *r, const BIGNUM *scalar,
 
     if (!EC_POINT_set_affine_coordinates(group, r, XR, YR, ctx))
     {
-        printf("\n ERROR: pka_ecc_pt_mult:"
+        printf("\n ERROR: EC_POINT_set_affine_coordinates:"
                           "failed to set result point co-ordinates.\n");
         rc = 0;
         goto end;
