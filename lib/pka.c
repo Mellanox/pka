@@ -31,6 +31,7 @@
 //   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 
+#define _GNU_SOURCE
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -44,6 +45,8 @@
 #include <errno.h>
 #include <pthread.h>
 #include <sys/wait.h>
+#include <openssl/async.h>
+#include <openssl/crypto.h>
 
 #include "pka_internal.h"
 #include "pka_utils.h"
@@ -54,6 +57,20 @@
 
 uint64_t cpu_f_hz;
 
+pthread_t polling_tid = 0;
+
+struct thread_args {
+    pka_local_info_t  *local_info;
+};
+
+struct poll_args {
+    ASYNC_JOB      *job;
+    int             fd;
+    pka_operand_t  *operand;
+    ecc_point_t   **ecc_point;
+};
+
+// Start statistics counters. Returns the command number associated with
 // Start statistics counters. Returns the command number associated with
 // a statistic entry.
 static __pka_inline uint32_t pka_stats_start_cycles_cnt(uint32_t queue_num)
@@ -372,6 +389,12 @@ void pka_term_local(pka_handle_t handle)
     local_info = (pka_local_info_t *) handle;
     if (local_info)
     {
+        if ( 0 != polling_tid )
+        {
+            pthread_cancel(polling_tid);
+            pthread_join(polling_tid, NULL);
+            polling_tid = 0;
+        }
         pka_atomic32_dec(&local_info->gbl_info->workers_cnt);
         free(local_info);
     }
@@ -501,7 +524,7 @@ static int pka_set_cmd_desc(pka_global_info_t      *gbl_info,
     return ret;
 }
 
-static int pka_rslt_dequeue(pka_local_info_t *local_info)
+static int pka_rslt_dequeue(pka_local_info_t *local_info, int *errors, int *count)
 {
     pka_global_info_t       *gbl_info;
     pka_ring_info_t         *ring;
@@ -511,8 +534,7 @@ static int pka_rslt_dequeue(pka_local_info_t *local_info)
     uint64_t                 user_data, cmd_num;
     uint8_t                  queue_num, ring_num, ring_idx;
 
-    int rc     = 0;
-    int errors = 0;
+    int rc = 0;
 
     gbl_info = local_info->gbl_info;
 
@@ -527,7 +549,7 @@ static int pka_rslt_dequeue(pka_local_info_t *local_info)
             if (rc != pka_ring_dequeue_rslt_desc(ring, &ring_desc))
             {
                 PKA_DEBUG(PKA_USER, "failed to dequeue result from ring\n");
-                errors += 1;
+                ++(*errors);
                 continue;
             }
 
@@ -536,7 +558,7 @@ static int pka_rslt_dequeue(pka_local_info_t *local_info)
                                     &ring_num))
             {
                 PKA_DEBUG(PKA_USER, "tag is invalid! result is dropped\n");
-                errors += 1;
+                ++(*errors);
                 continue;
             }
 
@@ -554,16 +576,17 @@ static int pka_rslt_dequeue(pka_local_info_t *local_info)
                 {
                     PKA_DEBUG(PKA_USER, "failed to enqueue result in"
                                         "queue %d\n", queue_num);
-                    errors += 1;
+                    ++(*errors);
                 }
 
+		++(*count);
                 // Capture processing cycles cnt
                 pka_stats_processing_cycles_cnt(queue_num, cmd_num);
             }
         }
     }
 
-    return errors;
+    return rc;
 }
 
 static int pka_cmd_enqueue(pka_global_info_t    *gbl_info,
@@ -661,24 +684,26 @@ static int pka_process_cmd_queues(pka_global_info_t *gbl_info,
     return 0;
 }
 
+// Caller should acquire gbl_info->lock.v and this function will release it.
 static int pka_process_queues_sync(pka_local_info_t *local_info)
 {
-    pka_global_info_t *gbl_info;
+    pka_global_info_t *gbl_info = local_info->gbl_info;
     pka_lock_t         lock;
     uint32_t           cmds_num, workers_cnt;
     uint8_t            worker_idx;
+    int errors = 0, count = 0;
 
-    int ret;
-
-    gbl_info    = local_info->gbl_info;
     workers_cnt = pka_atomic32_load(&gbl_info->workers_cnt);
     // We are now the owner of all of the PK context - including all
     // the HW rings.
 
     // First we do reply processing.
-    ret = pka_rslt_dequeue(local_info);
-    if (ret)
-        PKA_DEBUG(PKA_USER, "failed to dequeue %d results\n", ret);
+    if ( NULL == ASYNC_get_current_job()) {
+	// SYNC mode
+        int ret = pka_rslt_dequeue(local_info, &errors, &count);
+        if ( ret )
+            PKA_DEBUG(PKA_USER, "failed to dequeue %d results\n", ret);
+    }
 
     // Next process all SW cmd queues at least once. Stop when a full sweep
     // of the SW cmd queues results in nothing.
@@ -712,12 +737,15 @@ static int pka_process_queues_nosync(pka_local_info_t *local_info)
     uint32_t workers_cnt, cmds_num;
     uint8_t  worker_idx;
 
-    int ret;
+    int ret, errors = 0, count = 0;
 
     // First we do reply processing.
-    ret = pka_rslt_dequeue(local_info);
-    if (ret)
-        PKA_DEBUG(PKA_USER, "failed to dequeue %d results\n", ret);
+    if ( NULL == ASYNC_get_current_job()) {
+        // SYNC mode
+        ret = pka_rslt_dequeue(local_info, &errors, &count);
+        if ( ret )
+            PKA_DEBUG(PKA_USER, "failed to dequeue %d results\n", ret);
+    }
 
     workers_cnt = pka_atomic32_load(&local_info->gbl_info->workers_cnt);
     // Next process all SW cmd queues at least once. Stop when a full sweep
@@ -733,8 +761,176 @@ static int pka_process_queues_nosync(pka_local_info_t *local_info)
             break;
     }
 
-    return 0;
+    return ret;
 }
+
+static void init_results_operand(pka_results_t *results,
+                                 uint32_t       result_cnt,
+                                 uint8_t       *res1_buf,
+                                 uint32_t       res1_len,
+                                 uint8_t       *res2_buf,
+                                 uint32_t       res2_len)
+{
+    pka_operand_t *result_ptr;
+
+    PKA_ASSERT(result_cnt <= MAX_RESULT_CNT);
+    results->result_cnt = result_cnt;
+
+    switch (result_cnt) {
+    case 2:
+        PKA_ASSERT(res2_buf   != NULL);
+        result_ptr             = &results->results[1];
+        result_ptr->buf_ptr    = res2_buf;
+        memset(result_ptr->buf_ptr, 0, res2_len);
+        result_ptr->buf_len    = res2_len;
+        result_ptr->actual_len = 0;
+        // fall-through
+    case 1:
+        PKA_ASSERT(res1_buf   != NULL);
+        result_ptr             = &results->results[0];
+        result_ptr->buf_ptr    = res1_buf;
+        memset(result_ptr->buf_ptr, 0, res1_len);
+        result_ptr->buf_len    = res1_len;
+        result_ptr->actual_len = 0;
+    default:
+        return;
+    }
+}
+
+static void copy_operand(pka_operand_t *src, pka_operand_t *dst)
+{
+    PKA_ASSERT(src != NULL);
+    PKA_ASSERT(dst != NULL);
+
+    dst->actual_len = src->actual_len;
+    dst->big_endian = src->big_endian;
+    memcpy(dst->buf_ptr, src->buf_ptr, src->actual_len);
+}
+
+
+static void malloc_ecc_operand_buf(uint32_t       buf_len,
+                                   pka_operand_t *operand)
+{
+    if (operand == NULL)
+        return;
+
+    memset(operand, 0, sizeof(pka_operand_t));
+    operand->buf_ptr    = malloc(buf_len);
+    memset(operand->buf_ptr, 0, buf_len);
+    operand->buf_len    = buf_len;
+    operand->actual_len = 0;
+
+    return;
+}
+
+static ecc_point_t *malloc_ecc_point(uint32_t x_buf_len,
+                                     uint32_t y_buf_len)
+{
+    ecc_point_t *point;
+
+    point = malloc(sizeof(ecc_point_t));
+    memset(point, 0, sizeof(ecc_point_t));
+
+    malloc_ecc_operand_buf(x_buf_len, &point->x);
+    malloc_ecc_operand_buf(y_buf_len, &point->y);
+
+    return point;
+}
+
+
+static unsigned int g_pka_responses = 0;
+
+void* polling_func(void* args)
+{
+    struct thread_args *t_args = (struct thread_args*) args;
+    cpu_set_t cpuset;
+    pthread_t thread = pthread_self();
+    static uint64_t total_rslts = 0;
+    pka_lock_t         lock;
+
+    CPU_ZERO(&cpuset);
+
+    pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+
+    do {
+       int errors = 0, count = 0;
+
+       do {
+           lock = pka_try_acquire_lock(&t_args->local_info->gbl_info->lock.v,
+                                        t_args->local_info->id, false);
+           if (lock != LOCK_ACQUIRED)
+           {
+                   PKA_DEBUG(PKA_USER, "lock failed, retry\n");
+           }
+       }
+       while (lock != LOCK_ACQUIRED);
+       pka_rslt_dequeue(t_args->local_info, &errors, &count);
+
+       for (int i =0; i < count; ++i)
+       {
+           pka_results_t results;
+           uint8_t       res1[MAX_BYTE_LEN];
+           uint8_t       res2[MAX_BYTE_LEN];
+           memset(&results, 0, sizeof(pka_results_t));
+           init_results_operand(&results, 2, res1, MAX_BYTE_LEN, res2, MAX_BYTE_LEN);
+
+           pka_get_result((pka_handle_t) t_args->local_info, &results);
+           if (results.status == RC_NO_ERROR)
+           {
+	       struct poll_args *p_args;
+
+	       if (results.user_data)
+	       {
+		   static char c = 'X';
+                   p_args = (struct poll_args *) results.user_data;
+                   ++g_pka_responses;
+
+		   if (p_args->operand)
+		   {
+                       p_args->operand->buf_ptr = calloc(1,results.results[0].actual_len);
+                       p_args->operand->buf_len = results.results[0].actual_len;
+                       p_args->operand->actual_len = 0;
+                       copy_operand(&results.results[0], p_args->operand);
+                   } else if (p_args->ecc_point != NULL)
+                   {
+		       uint32_t x_len = results.results[0].actual_len;
+		       uint32_t y_len = results.results[1].actual_len;
+		       *p_args->ecc_point = malloc_ecc_point(x_len, y_len);
+                       copy_operand(&results.results[0], &(*p_args->ecc_point)->x);
+                       copy_operand(&results.results[1], &(*p_args->ecc_point)->y);
+                   }
+                   ++total_rslts;
+                   if ( -1 == write(p_args->fd + 1, &c, 1))
+		   {
+		       perror(" polling write ");
+                       // write failure
+		   }
+		   free(p_args);
+	       }
+	   }
+	   else 
+	   {
+               fprintf(stderr, " PKA responses error %d\n", results.status);
+	   }
+       }
+
+       do {
+           lock = pka_try_release_lock(&t_args->local_info->gbl_info->lock.v, t_args->local_info->id);
+       }
+       while (lock != LOCK_RELEASED);
+
+       usleep(10);
+       if (count == 0)
+       {
+           usleep(100);
+       } 
+
+    }
+    while (1);
+    // exit the current thread
+    pthread_exit(NULL);
+}
+
 
 // Submit PK command
 static pka_status_t pka_submit_cmd(pka_handle_t    handle,
@@ -751,7 +947,8 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
     pka_queue_cmd_desc_t  cmd_desc;
     uint32_t              cmd_num;
 
-    int rc = 0;
+    int rc = 0, errors = 0, count = 0;
+    ASYNC_JOB *job = ASYNC_get_current_job();
 
     // Get context information.
     local_info = (pka_local_info_t *) handle;
@@ -763,7 +960,6 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
     cmd_num = pka_stats_start_cycles_cnt(worker_id);
 
     // Set a command descriptor to enqueue.
-    //cmd_num    = local_info->req_num;
     memset(&cmd_desc, 0, sizeof(pka_queue_cmd_desc_t));
     if (pka_queue_set_cmd_desc(&cmd_desc, cmd_num, user_data, opcode,
                                     operands))
@@ -773,6 +969,32 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
         return FAILURE;
     }
 
+    if (NULL == job) 
+    {
+        // SYNC mode
+	int ret = pka_rslt_dequeue(local_info, &errors, &count);
+        if (ret)
+            PKA_DEBUG(PKA_USER, "failed to dequeue %d results\n", ret);
+    } else
+    {
+	ASYNC_WAIT_CTX *ctx = ASYNC_get_wait_ctx(job);
+	int   fd = 0;
+	void *p_args = NULL;
+
+        if (0 == polling_tid)
+        {
+            struct thread_args *t_args = malloc(sizeof (struct thread_args));
+            t_args->local_info = local_info;
+
+            pthread_create(&polling_tid, NULL, &polling_func, (void*)t_args);
+        }
+
+	if (NULL != ctx)
+	{
+            ASYNC_WAIT_CTX_get_fd(ctx, handle, &fd, &p_args);
+            cmd_desc.user_data = (uint64_t) p_args;
+	}
+    }
     //
     // Start processing PK command.
     //
@@ -793,7 +1015,6 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
                                         worker_id);
                 return FAILURE;
             }
-
         }
         else
         {
@@ -807,8 +1028,12 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
             }
         }
 
-        local_info->req_num++;
         pka_process_queues_nosync(local_info);
+	
+        if (job)
+            ASYNC_pause_job();
+
+        local_info->req_num++;
         return SUCCESS;
     }
 
@@ -821,7 +1046,10 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
     // acquire the lock.  Should succeed the vast majority of time.  Make sure
     // set_bit is FALSE here, since we have not yet copied the request
     // (cmd and operands) into the sw_request ring.
-    lock = pka_try_acquire_lock(&gbl_info->lock.v, local_info->id, false);
+    do {
+        lock = pka_try_acquire_lock(&gbl_info->lock.v, local_info->id, false);
+    } while (lock != LOCK_ACQUIRED);
+
     if (lock == LOCK_ACQUIRED)
     {
         // We are now the owner of all of the global state - including all
@@ -857,6 +1085,9 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
         }
 
         pka_process_queues_sync(local_info);
+        if (job)
+            ASYNC_pause_job();
+
         local_info->req_num++;
         return SUCCESS;
     }

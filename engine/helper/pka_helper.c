@@ -33,6 +33,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <openssl/async.h>
+#include <openssl/crypto.h>
 
 #include "pka_helper.h"
 
@@ -661,7 +663,7 @@ static ecc_point_t *results_to_ecc_point(pka_handle_t handle)
         {
             PKA_ERROR(PKA_TESTS, "pka_get_result status=0x%x Key length "
                           "reaches PKA hardware limitations\n" , results.status);
-        } else 
+        } else
         {
             PKA_ERROR(PKA_TESTS, "pka_get_result status=0x%x\n", results.status);
         }
@@ -721,8 +723,112 @@ static void set_bignum(pka_bignum_t *bn, pka_operand_t *operand)
 }
 
 //
-// Synchronous PKA implementation
+// Synchronous/Asynchronous PKA implementation
 //
+
+
+struct poll_args {
+    ASYNC_JOB     *job;
+    int            fd;
+    pka_operand_t *operand;
+    ecc_point_t  **ecc_point;
+};
+
+
+void init_operand(pka_operand_t *operand,
+                  uint8_t       *buf,
+                  uint32_t       buf_len,
+                  uint8_t        big_endian)
+{
+    memset(operand, 0, sizeof(pka_operand_t));
+    memset(buf,     0, buf_len);
+    operand->buf_ptr    = buf;
+    operand->buf_len    = buf_len;
+    operand->actual_len = 0;
+    operand->big_endian = big_endian;
+}
+
+
+typedef enum { PKA_SYNC, PKA_ASYNC, PKA_ASYNC_ERROR_PIPE,
+               PKA_ASYNC_ERROR_OPERAND, PKA_ASYNC_ERROR_ARGS } pka_mode_t;
+
+typedef enum { PKA_ALGO_MOD, PKA_ALGO_ECC } pka_algo_t;
+
+
+pka_mode_t init_pka_async_job(pka_handle_t handle,     pka_algo_t    algo,
+                              pka_operand_t **operand, ecc_point_t **ecc_point)
+{
+    ASYNC_JOB *job = ASYNC_get_current_job();
+
+    if (job)
+    {
+        int               pipefds[2] = {0, 0}, fd = 0;
+        struct poll_args *p_args = NULL;
+
+        uint8_t  *buf = malloc(MAX_BUF + 1);
+        size_t    numfds = 0;
+        ASYNC_WAIT_CTX *ctx = ASYNC_get_wait_ctx(job);
+
+        if (PKA_ALGO_MOD == algo)
+        {
+            *operand = malloc(sizeof (pka_operand_t));
+            if (*operand  == NULL)
+            {
+                printf("Failed to malloc operand\n");
+                return PKA_ASYNC_ERROR_OPERAND;
+            }
+            init_operand((pka_operand_t *)*operand, buf, MAX_BUF, 0);
+        }
+        p_args = OPENSSL_malloc(sizeof(struct poll_args));
+        if (p_args == NULL)
+        {
+            printf("%s Failed to malloc p_args\n", __FUNCTION__);
+	    free(operand);
+            return PKA_ASYNC_ERROR_ARGS;
+        }
+
+        if (pipe(pipefds) != 0)
+        {
+            printf("%s Failed to create pipe\n", __FUNCTION__);
+            if (PKA_ALGO_MOD == algo)
+                free(operand);
+
+            free(p_args);
+            return PKA_ASYNC_ERROR_PIPE;
+        }
+
+        if (!ASYNC_WAIT_CTX_get_all_fds(ctx, &fd, &numfds)
+                 || numfds >= 1)
+        {
+            ASYNC_WAIT_CTX_clear_fd(ctx, (void*) handle);
+            close(fd);
+            close(fd+1);
+        }
+
+        p_args->fd = pipefds[0];
+
+        switch (algo)
+        {
+            case PKA_ALGO_MOD:
+                p_args->operand = *operand;
+                break;
+            case PKA_ALGO_ECC:
+                p_args->operand   = NULL;
+                p_args->ecc_point = ecc_point;
+                break;
+            default:
+                break;
+        }
+
+        p_args->job = job;
+
+        ASYNC_WAIT_CTX_set_wait_fd(ASYNC_get_wait_ctx(job), (void*) handle,
+                                   pipefds[0], p_args, NULL);
+        return PKA_ASYNC;
+    }
+    return PKA_SYNC;
+}
+
 
 static pka_operand_t *pka_do_mod_exp(pka_handle_t   handle,
                                      pka_operand_t *value,
@@ -730,6 +836,18 @@ static pka_operand_t *pka_do_mod_exp(pka_handle_t   handle,
                                      pka_operand_t *modulus)
 {
     int rc;
+
+    pka_operand_t *operand = NULL;
+    pka_mode_t mode = init_pka_async_job(handle, PKA_ALGO_MOD, &operand, NULL);
+
+    switch (mode) {
+        case PKA_ASYNC:
+        case PKA_SYNC:
+            break;
+        default:
+            DEBUG(PKA_D_ERROR, "pka_do_mod_exp failed to setup async job %d\n", mode);
+            return NULL;
+    }
 
     PKA_ASSERT(value    != NULL);
     PKA_ASSERT(exponent != NULL);
@@ -740,13 +858,13 @@ static pka_operand_t *pka_do_mod_exp(pka_handle_t   handle,
     if (SUCCESS != rc)
     {
         if ( PKA_OPERAND_LEN_TOO_LONG == rc )
-        {
-            DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc=%d "
-                 "Key length reaches PKA hardware limitations\n", rc);
-        } else
-        {
-            DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc=%d\n", rc);
-        }
+	{
+            DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc =%d "
+			    "Key length reaches PKA hardware limitation\n", rc);
+	} else
+	{
+            DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc =%d\n", rc);
+	}
 #ifdef VERBOSE_MODE
         print_operand("  value   =", value,    "\n");
         print_operand("  exponent=", exponent, "\n");
@@ -755,7 +873,7 @@ static pka_operand_t *pka_do_mod_exp(pka_handle_t   handle,
         return NULL;
     }
 
-    return results_to_operand(handle);
+    return (PKA_SYNC == mode)? results_to_operand(handle) : operand;
 }
 
 static pka_operand_t *pka_do_mod_exp_crt(pka_handle_t   handle,
@@ -767,19 +885,30 @@ static pka_operand_t *pka_do_mod_exp_crt(pka_handle_t   handle,
                                          pka_operand_t *qinv)
 {
     int rc;
+    pka_operand_t *operand = NULL;
+    pka_mode_t mode = init_pka_async_job(handle, PKA_ALGO_MOD, &operand, NULL);
+
+    switch (mode) {
+        case PKA_ASYNC:
+        case PKA_SYNC:
+            break;
+        default:
+            DEBUG(PKA_D_ERROR, "pka_do_mod_exp_crt failed to setup async job %d\n", mode);
+            return NULL;
+    }
 
     rc = pka_modular_exp_crt(handle, NULL, value, p, q, d_p, d_q, qinv);
 
     if (SUCCESS != rc)
     {
-        if ( PKA_OPERAND_LEN_TOO_LONG == rc )
-        {
-            DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc=%d "
-                     "Key length reaches PKA hardware limitations\n", rc);
-        } else
-        {
-            DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc=%d\n", rc);
-        }
+        if (PKA_OPERAND_LEN_TOO_LONG == rc)
+	{
+            DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc =%d "
+			    "Key length reaches PKA hardware limitation\n", rc);
+	} else
+	{
+            DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc =%d\n", rc);
+	}
 #ifdef VERBOSE_MODE
         print_operand("  value   =", value, "\n");
         print_operand("  p       =", p,     "\n");
@@ -791,7 +920,7 @@ static pka_operand_t *pka_do_mod_exp_crt(pka_handle_t   handle,
         return NULL;
     }
 
-    return results_to_operand(handle);
+    return (PKA_SYNC == mode)? results_to_operand(handle) : operand;
 }
 
 static ecc_point_t *pka_do_ecc_pt_mult(pka_handle_t   handle,
@@ -800,6 +929,17 @@ static ecc_point_t *pka_do_ecc_pt_mult(pka_handle_t   handle,
                                        pka_operand_t *multiplier)
 {
     int rc;
+    ecc_point_t *ecc_point;
+    pka_mode_t mode = init_pka_async_job(handle, PKA_ALGO_ECC, NULL, &ecc_point);
+
+    switch (mode) {
+        case PKA_ASYNC:
+        case PKA_SYNC:
+            break;
+        default:
+            DEBUG(PKA_D_ERROR, "pka_do_ecc_pt_mult failed to setup async job %d\n", mode);
+            return NULL;
+    }
 
     PKA_ASSERT(curve      != NULL);
     PKA_ASSERT(point      != NULL);
@@ -819,9 +959,9 @@ static ecc_point_t *pka_do_ecc_pt_mult(pka_handle_t   handle,
         print_operand("  multiplier =", multiplier,  "\n");
 #endif
         return NULL;
-    }
+    } 
 
-    return results_to_ecc_point(handle);
+    return (PKA_SYNC == mode)? results_to_ecc_point(handle) : ecc_point;
 }
 
 static ecc_point_t *pka_do_ecc_pt_add(pka_handle_t   handle,
@@ -830,7 +970,18 @@ static ecc_point_t *pka_do_ecc_pt_add(pka_handle_t   handle,
                                       ecc_point_t   *pointB)
 {
     int rc;
+    ecc_point_t *ecc_point;
+    pka_mode_t mode = init_pka_async_job(handle, PKA_ALGO_ECC, NULL, &ecc_point);
 
+    switch (mode) {
+        case PKA_ASYNC:
+        case PKA_SYNC:
+            break;
+        default:
+            DEBUG(PKA_D_ERROR, "pka_do_ecc_pt_add failed to setup async job %d\n", mode);
+            return NULL;
+    }
+ 
     PKA_ASSERT(curve  != NULL);
     PKA_ASSERT(pointA != NULL);
     PKA_ASSERT(pointB != NULL);
@@ -851,8 +1002,10 @@ static ecc_point_t *pka_do_ecc_pt_add(pka_handle_t   handle,
 #endif
         return NULL;
     }
-
-    return results_to_ecc_point(handle);
+    if ( PKA_SYNC == mode )
+        return results_to_ecc_point(handle);
+    else
+        return ecc_point;
 }
 
 static pka_operand_t *pka_do_mod_inv(pka_handle_t   handle,
@@ -860,6 +1013,17 @@ static pka_operand_t *pka_do_mod_inv(pka_handle_t   handle,
                                      pka_operand_t *modulus)
 {
     int rc;
+    pka_operand_t *operand = NULL;
+    pka_mode_t mode = init_pka_async_job(handle, PKA_ALGO_MOD, &operand, NULL);
+
+    switch (mode) {
+        case PKA_ASYNC:
+        case PKA_SYNC:
+            break;
+        default:
+            DEBUG(PKA_D_ERROR, "pka_do_mod_inv failed to setup async job %d\n", mode);
+            return NULL;
+    }
 
     PKA_ASSERT(value   != NULL);
     PKA_ASSERT(modulus != NULL);
@@ -868,15 +1032,24 @@ static pka_operand_t *pka_do_mod_inv(pka_handle_t   handle,
 
     if (SUCCESS != rc)
     {
-        DEBUG(PKA_D_ERROR, "pka_modular_inverse failed, rc=%d\n", rc);
+        if ( PKA_OPERAND_LEN_TOO_LONG == rc )
+	{
+            DEBUG(PKA_D_ERROR, "pka_modular_inverse failed, rc =%d "
+			    "Key length reaches PKA hardware limitation\n", rc);
+	} else
+	{
+            DEBUG(PKA_D_ERROR, "pka_modular_inverse failed, rc =%d\n", rc);
+	}
 #ifdef VERBOSE_MODE
         print_operand("  value   =", value,    "\n");
         print_operand("  modulus =", modulus,  "\n");
 #endif
         return NULL;
     }
-
-    return results_to_operand(handle);
+    if ( PKA_SYNC == mode )
+        return results_to_operand(handle);
+    else
+        return operand;
 }
 
 //
@@ -952,22 +1125,21 @@ static int pka_engine_get_instance(pka_engine_info_t *engine)
     pka_instance_t  instance;
     uint32_t        cmd_queue_sz, rslt_queue_sz;
     uint8_t         queue_cnt, ring_cnt, flags;
-    
+
     PKA_ASSERT(engine   != NULL);
 
     if (!engine->valid)
     {
         FILE *f = fopen("/dev/pka/95", "r");
         // Init the PKA instance before calling anything else
-        flags         = PKA_F_PROCESS_MODE_MULTI | PKA_F_SYNC_MODE_ENABLE;
         if ( NULL != f )
         {
             ring_cnt  = PKA_ENGINE_RING_CNT_BF3_HB;
             queue_cnt = PKA_ENGINE_QUEUE_CNT_BF3_HB;
             fclose(f);
-        } else 
+        } else
         {
-            FILE *f = fopen("/dev/pka/63", "r");
+            f = fopen("/dev/pka/63", "r");
             if ( NULL != f )
             {
                 ring_cnt  = PKA_ENGINE_RING_CNT_BF3_MB;
@@ -975,10 +1147,17 @@ static int pka_engine_get_instance(pka_engine_info_t *engine)
                 fclose(f);
 	    } else
 	    {
-                ring_cnt  = PKA_ENGINE_RING_CNT;
-                queue_cnt = PKA_ENGINE_QUEUE_CNT;            
+                f = fopen("/dev/pka/31", "r");
+                if ( NULL != f )
+                {
+                    ring_cnt  = PKA_ENGINE_RING_CNT;
+                    queue_cnt = PKA_ENGINE_QUEUE_CNT;
+		    fclose(f);
+                } else
+                    return 0;
 	    }
         }
+        flags         = PKA_F_PROCESS_MODE_MULTI | PKA_F_SYNC_MODE_ENABLE;
         cmd_queue_sz  = PKA_MAX_OBJS * PKA_CMD_DESC_MAX_DATA_SIZE;
         rslt_queue_sz = PKA_MAX_OBJS * PKA_RSLT_DESC_MAX_DATA_SIZE;
         instance      = pka_init_global(PKA_ENGINE_INSTANCE_NAME,
