@@ -891,7 +891,8 @@ void* polling_func(void* args)
                        p_args->operand->buf_len = results.results[0].actual_len;
                        p_args->operand->actual_len = 0;
                        copy_operand(&results.results[0], p_args->operand);
-                   } else if (p_args->ecc_point != NULL)
+                   } 
+                   else if (p_args->ecc_point != NULL)
                    {
 		       uint32_t x_len = results.results[0].actual_len;
 		       uint32_t y_len = results.results[1].actual_len;
@@ -975,7 +976,8 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
 	int ret = pka_rslt_dequeue(local_info, &errors, &count);
         if (ret)
             PKA_DEBUG(PKA_USER, "failed to dequeue %d results\n", ret);
-    } else
+    } 
+    else
     {
 	ASYNC_WAIT_CTX *ctx = ASYNC_get_wait_ctx(job);
 	int   fd = 0;
@@ -1030,6 +1032,9 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
 
         pka_process_queues_nosync(local_info);
 	
+	// With openSSL async_jobs, The job will be context swtiched out of
+	// execution. Once it received a signal - by file descriptor of pipe.
+	// The context will became active and continue the execuation.
         if (job)
             ASYNC_pause_job();
 
