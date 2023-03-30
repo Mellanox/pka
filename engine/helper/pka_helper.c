@@ -868,11 +868,11 @@ static pka_operand_t *pka_do_mod_exp(pka_handle_t   handle,
         {
             DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc =%d "
 			    "Key length reaches PKA hardware limitation\n", rc);
-	      }
+	}
         else
-	      {
+	{
             DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc =%d\n", rc);
-	      }
+	}
 
 #ifdef VERBOSE_MODE
         print_operand("  value   =", value,    "\n");
@@ -910,16 +910,15 @@ static pka_operand_t *pka_do_mod_exp_crt(pka_handle_t   handle,
 
     if (SUCCESS != rc)
     {
-
         if (PKA_OPERAND_LEN_TOO_LONG == rc)
-	      {
+        {
             DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc =%d "
 			    "Key length reaches PKA hardware limitation\n", rc);
-	      } 
+        } 
         else
-	      {
+        {
             DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc =%d\n", rc);
-	      }
+        }
 
 #ifdef VERBOSE_MODE
         print_operand("  value   =", value, "\n");
@@ -1138,7 +1137,6 @@ static int pka_engine_get_instance(pka_engine_info_t *engine)
     pka_instance_t  instance;
     uint32_t        cmd_queue_sz, rslt_queue_sz;
     uint8_t         queue_cnt, ring_cnt, flags;
-    FILE *f = fopen("/dev/pka/95", "r");
 
     PKA_ASSERT(engine   != NULL);
 
