@@ -61,12 +61,14 @@ extern "C" {
 
 #define PKA_BITS    (PKA_BYTES * 8)
 
+
 #define PKA_ENGINE_QUEUE_CNT         8
 #define PKA_ENGINE_RING_CNT          4
 #define PKA_ENGINE_QUEUE_CNT_BF3_MB 16
 #define PKA_ENGINE_RING_CNT_BF3_MB   4
 #define PKA_ENGINE_QUEUE_CNT_BF3_HB 24
 #define PKA_ENGINE_RING_CNT_BF3_HB   4
+
 
 #define PKA_ENGINE_INSTANCE_NAME    "SSL engine"
 
