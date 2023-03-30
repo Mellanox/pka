@@ -663,7 +663,8 @@ static ecc_point_t *results_to_ecc_point(pka_handle_t handle)
         {
             PKA_ERROR(PKA_TESTS, "pka_get_result status=0x%x Key length "
                           "reaches PKA hardware limitations\n" , results.status);
-        } else
+        } 
+        else
         {
             PKA_ERROR(PKA_TESTS, "pka_get_result status=0x%x\n", results.status);
         }
@@ -749,7 +750,7 @@ void init_operand(pka_operand_t *operand,
 }
 
 
-typedef enum { PKA_SYNC, PKA_ASYNC, PKA_ASYNC_ERROR_PIPE,
+typedef enum { PKA_SYNC, PKA_ASYNC, PKA_ASYNC_ERROR_PIPE, PKA_ASYNC_ERROR_MEM,
                PKA_ASYNC_ERROR_OPERAND, PKA_ASYNC_ERROR_ARGS } pka_mode_t;
 
 typedef enum { PKA_ALGO_MOD, PKA_ALGO_ECC } pka_algo_t;
@@ -764,9 +765,15 @@ pka_mode_t init_pka_async_job(pka_handle_t handle,     pka_algo_t    algo,
     {
         int               pipefds[2] = {0, 0}, fd = 0;
         struct poll_args *p_args = NULL;
+        size_t    numfds = 0;
 
         uint8_t  *buf = malloc(MAX_BUF + 1);
-        size_t    numfds = 0;
+
+	if (NULL == buf)
+        {
+            printf("Failed to malloc buffer\n");
+            return PKA_ASYNC_ERROR_MEM;
+        }
         ASYNC_WAIT_CTX *ctx = ASYNC_get_wait_ctx(job);
 
         if (PKA_ALGO_MOD == algo)
@@ -861,7 +868,8 @@ static pka_operand_t *pka_do_mod_exp(pka_handle_t   handle,
 	{
             DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc =%d "
 			    "Key length reaches PKA hardware limitation\n", rc);
-	} else
+	} 
+        else
 	{
             DEBUG(PKA_D_ERROR, "pka_modular_exp failed, rc =%d\n", rc);
 	}
@@ -905,7 +913,8 @@ static pka_operand_t *pka_do_mod_exp_crt(pka_handle_t   handle,
 	{
             DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc =%d "
 			    "Key length reaches PKA hardware limitation\n", rc);
-	} else
+	} 
+        else
 	{
             DEBUG(PKA_D_ERROR, "pka_modular_exp_crt failed, rc =%d\n", rc);
 	}
@@ -1036,7 +1045,8 @@ static pka_operand_t *pka_do_mod_inv(pka_handle_t   handle,
 	{
             DEBUG(PKA_D_ERROR, "pka_modular_inverse failed, rc =%d "
 			    "Key length reaches PKA hardware limitation\n", rc);
-	} else
+	} 
+        else
 	{
             DEBUG(PKA_D_ERROR, "pka_modular_inverse failed, rc =%d\n", rc);
 	}
@@ -1137,7 +1147,8 @@ static int pka_engine_get_instance(pka_engine_info_t *engine)
             ring_cnt  = PKA_ENGINE_RING_CNT_BF3_HB;
             queue_cnt = PKA_ENGINE_QUEUE_CNT_BF3_HB;
             fclose(f);
-        } else
+        } 
+        else
         {
             f = fopen("/dev/pka/63", "r");
             if ( NULL != f )
@@ -1145,7 +1156,8 @@ static int pka_engine_get_instance(pka_engine_info_t *engine)
                 ring_cnt  = PKA_ENGINE_RING_CNT_BF3_MB;
                 queue_cnt = PKA_ENGINE_QUEUE_CNT_BF3_MB;
                 fclose(f);
-	    } else
+	    } 
+            else
 	    {
                 f = fopen("/dev/pka/31", "r");
                 if ( NULL != f )
@@ -1153,7 +1165,8 @@ static int pka_engine_get_instance(pka_engine_info_t *engine)
                     ring_cnt  = PKA_ENGINE_RING_CNT;
                     queue_cnt = PKA_ENGINE_QUEUE_CNT;
 		    fclose(f);
-                } else
+                } 
+                else
                     return 0;
 	    }
         }
@@ -1277,7 +1290,8 @@ int pka_bn_mod_exp(pka_bignum_t *bn_value,
     if (result) {
         set_bignum(bn_result, result);
         rc = 1;
-    } else
+    } 
+    else
         rc = 0;
 
     free_operand(value);
@@ -1320,7 +1334,8 @@ int pka_rsa_mod_exp_crt(pka_bignum_t  *bn_value,
     if (result) {
         set_bignum(bn_result, result);
         rc = 1;
-    } else
+    } 
+    else
         rc = 0;
 
     free_operand(value);
@@ -1461,7 +1476,8 @@ int  pka_bn_mod_inv(pka_bignum_t *bn_value,
     if (result) {
         set_bignum(bn_result, result);
         rc = 1;
-    } else
+    } 
+    else
         rc = 0;
 
     free_operand(value);
