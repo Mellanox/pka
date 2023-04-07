@@ -737,7 +737,7 @@ static int pka_process_queues_nosync(pka_local_info_t *local_info)
     uint32_t workers_cnt, cmds_num;
     uint8_t  worker_idx;
 
-    int ret, errors = 0, count = 0;
+    int ret = 0, errors = 0, count = 0;
 
     // First we do reply processing.
     if ( NULL == ASYNC_get_current_job()) {
