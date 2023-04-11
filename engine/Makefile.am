@@ -6,6 +6,6 @@ libbfengine_la_LIBADD = $(top_builddir)/lib/libPKA.la
 libbfengine_la_CFLAGS = \
 	-fPIC -O3 -g -Wall -Werror \
 	-I$(top_srcdir)/include -I$(top_srcdir)/lib -I$(top_srcdir)/engine/helper \
-	-DOPENSSL_API_COMPAT=0x10100000L
+	-DOPENSSL_API_COMPAT=0x10100000L -I/usr/include/openssl11
 
 libbfengine_la_LDFLAGS = -lcrypto -version-info 2:0:1
