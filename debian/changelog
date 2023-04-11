@@ -1,3 +1,12 @@
+libpka (2.0-1) UNRELEASED; urgency=low
+
+  * Add BF3 MB, HB cards support.
+  * Add OpenSSL async_jobs support.
+  * Add asynchronous PKA processing.
+  * Add dedicated polling thread for asynchronous PKA processing.
+  * Bug fixes
+
+ -- Shih-Yi Chen <shihyic@nvidia.com>  Mon, 11 Apr 2023 14:26:58 +0000
 libpka (1.4-1) UNRELEASED; urgency=low
 
   * Guard against multiple calls to engine destroy function.

@@ -1,4 +1,4 @@
-AC_INIT([pka], [1.0], [kblaiech@mellanox.com])
+AC_INIT([pka], [2.0], [shihyic@nvidia.com])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 
 AC_PROG_CC
