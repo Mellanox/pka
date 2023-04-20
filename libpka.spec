@@ -1,10 +1,10 @@
 Name: libpka
-Version: 1.4
+Version: 2.0
 Release: 1%{?dist}
-Summary: Mellanox BlueField Public Key Acceleration (PKA) Package
+Summary: Nvidia BlueField Public Key Acceleration (PKA) Package
 
 License: BSD
-Url: https://mellanox.com
+Url: https://nvidia.com
 Source: %{name}-%{version}.tgz
 
 BuildRequires: binutils
@@ -39,6 +39,10 @@ PKA hardware.
     mkdir -p $RPM_BUILD_ROOT%{_libdir}/engines-1.1
     cp $RPM_BUILD_ROOT%{_libdir}/libbfengine.so.*.*.* $RPM_BUILD_ROOT%{_libdir}/engines-1.1/
 %endif
+%if 0%{?openEuler} == 2
+    mkdir -p $RPM_BUILD_ROOT%{_libdir}/engines-1.1
+    cp $RPM_BUILD_ROOT%{_libdir}/libbfengine.so.*.*.* $RPM_BUILD_ROOT%{_libdir}/engines-1.1/
+%endif
 
 %preun
 %if 0%{?rhel} == 7
@@ -47,12 +51,18 @@ PKA hardware.
 %if 0%{?rhel} == 8
     rm -f %{_libdir}/engines-1.1/pka.so
 %endif
+%if 0%{?openEuler} == 2
+    rm -f %{_libdir}/engines-1.1/pka.so
+%endif
 
 %post
 %if 0%{?rhel} == 7
     ln -s %{_libdir}/openssl/engines/libbfengine.so.*.*.* %{_libdir}/openssl/engines/libpka.so
 %endif
 %if 0%{?rhel} == 8
+    ln -s %{_libdir}/engines-1.1/libbfengine.so.*.*.* %{_libdir}/engines-1.1/pka.so
+%endif
+%if 0%{?openEuler} == 2
     ln -s %{_libdir}/engines-1.1/libbfengine.so.*.*.* %{_libdir}/engines-1.1/pka.so
 %endif
 
@@ -69,5 +79,9 @@ PKA hardware.
 %if 0%{?rhel} == 8
     %{_libdir}/engines-1.1/libbfengine*
 %endif
+%if 0%{?openEuler} == 2
+    %{_libdir}/engines-1.1/libbfengine*
+%endif
+
 
 %doc COPYING
