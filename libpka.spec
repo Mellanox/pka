@@ -31,41 +31,14 @@ PKA hardware.
 
 %install
 %make_install
-%if 0%{?rhel} == 7
-    mkdir -p $RPM_BUILD_ROOT%{_libdir}/openssl/engines
-    cp $RPM_BUILD_ROOT%{_libdir}/libbfengine.so.*.*.* $RPM_BUILD_ROOT%{_libdir}/openssl/engines/
-%endif
-%if 0%{?rhel} == 8
-    mkdir -p $RPM_BUILD_ROOT%{_libdir}/engines-1.1
-    cp $RPM_BUILD_ROOT%{_libdir}/libbfengine.so.*.*.* $RPM_BUILD_ROOT%{_libdir}/engines-1.1/
-%endif
-%if 0%{?openEuler} == 2
-    mkdir -p $RPM_BUILD_ROOT%{_libdir}/engines-1.1
-    cp $RPM_BUILD_ROOT%{_libdir}/libbfengine.so.*.*.* $RPM_BUILD_ROOT%{_libdir}/engines-1.1/
-%endif
+mkdir -p $RPM_BUILD_ROOT%{_libdir}/engines-1.1
+cp $RPM_BUILD_ROOT%{_libdir}/libbfengine.so.*.*.* $RPM_BUILD_ROOT%{_libdir}/engines-1.1/
 
 %preun
-%if 0%{?rhel} == 7
-    rm -f %{_libdir}/openssl/engines/libpka.so
-%endif
-%if 0%{?rhel} == 8
-    rm -f %{_libdir}/engines-1.1/pka.so
-%endif
-%if 0%{?openEuler} == 2
-    rm -f %{_libdir}/engines-1.1/pka.so
-%endif
+rm -f %{_libdir}/engines-1.1/pka.so
 
 %post
-%if 0%{?rhel} == 7
-    ln -s %{_libdir}/openssl/engines/libbfengine.so.*.*.* %{_libdir}/openssl/engines/libpka.so
-%endif
-%if 0%{?rhel} == 8
-    ln -s %{_libdir}/engines-1.1/libbfengine.so.*.*.* %{_libdir}/engines-1.1/pka.so
-%endif
-%if 0%{?openEuler} == 2
-    ln -s %{_libdir}/engines-1.1/libbfengine.so.*.*.* %{_libdir}/engines-1.1/pka.so
-%endif
-
+ln -s %{_libdir}/engines-1.1/libbfengine.so.*.*.* %{_libdir}/engines-1.1/pka.so
 
 %files
 %defattr(-, root, root)
@@ -73,14 +46,6 @@ PKA hardware.
 %{_libdir}/libPKA*
 %{_libdir}/libbfengine*
 %{_bindir}/*
-%if 0%{?rhel} == 7
-    %{_libdir}/openssl/engines/libbfengine*
-%endif
-%if 0%{?rhel} == 8
-    %{_libdir}/engines-1.1/libbfengine*
-%endif
-%if 0%{?openEuler} == 2
-    %{_libdir}/engines-1.1/libbfengine*
-%endif
+%{_libdir}/engines-1.1/libbfengine*
 
 %doc COPYING
