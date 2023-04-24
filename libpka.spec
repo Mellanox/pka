@@ -47,6 +47,5 @@ ln -s %{_libdir}/engines-1.1/libbfengine.so.*.*.* %{_libdir}/engines-1.1/pka.so
 %{_libdir}/libbfengine*
 %{_bindir}/*
 %{_libdir}/engines-1.1/libbfengine*
-%{_libdir}/engines-1.1/pka.so
 
 %doc COPYING
