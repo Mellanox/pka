@@ -30,10 +30,10 @@ if test "x$enable_engine" != xno;
     AC_CHECK_LIB([ssl], [OPENSSL_init_ssl], [FOUND_SSL_LIB="yes"])
     AC_CHECK_LIB([ssl], [SSL_library_init], [FOUND_SSL_LIB="yes"])
     AC_CHECK_FILE(/usr/include/openssl11, OPENSSLV=11, [])
-    AM_CONDITIONAL(OPENSSL11, test "x$OPENSSLV" = x11)
     AS_IF([test "x$FOUND_SSL_LIB" = xno],
             AC_MSG_ERROR([can't find library 'ssl']))
 fi
+AM_CONDITIONAL(OPENSSL11, test "x$OPENSSLV" = x11)
 AM_CONDITIONAL([HAVE_SSL_LIB], [test "x$FOUND_SSL_LIB" = xyes])
 AM_COND_IF([HAVE_SSL_LIB], [AC_CONFIG_FILES([engine/Makefile])])
 
