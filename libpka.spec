@@ -26,6 +26,7 @@ PKA hardware.
 %setup
 
 %build
+./autogen.sh
 %configure
 %make_build
 
