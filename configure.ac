@@ -33,6 +33,7 @@ if test "x$enable_engine" != xno;
     AS_IF([test "x$FOUND_SSL_LIB" = xno],
             AC_MSG_ERROR([can't find library 'ssl']))
 fi
+
 AM_CONDITIONAL(OPENSSL11, test "x$OPENSSLV" = x11)
 AM_CONDITIONAL([HAVE_SSL_LIB], [test "x$FOUND_SSL_LIB" = xyes])
 AM_COND_IF([HAVE_SSL_LIB], [AC_CONFIG_FILES([engine/Makefile])])

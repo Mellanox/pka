@@ -18,4 +18,3 @@ libbfengine_la_CFLAGS = \
 libbfengine_la_LDFLAGS = \
        -lcrypto -version-info 2:0:1
 endif
-
