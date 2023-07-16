@@ -1,39 +1,12 @@
 #!/usr/bin/make -f
 
-ifeq (,$(findstring OpenSSL 3.0, $(shell openssl version)))
-        OPENSSL_ENGINES_DIR=engines-1.1
-else
-        OPENSSL_ENGINES_DIR=engines-3
-endif
-
-ifeq (,$(findstring openEuler, $(shell grep -o openEuler /etc/os-release)))
-        LIB_DIR=usr/lib/${DEB_TARGET_GNU_TYPE}
-else
-        LIB_DIR=usr/lib64
-endif
-
-export CFLAGS=-g -O2 -fdebug-prefix-map=/root=. -fstack-protector-strong -Wformat -Werror=format-security
-export CPPFLAGS=-Wdate-time -D_FORTIFY_SOURCE=2
-export CXXFLAGS=-g -O2 -fdebug-prefix-map=/root=. -fstack-protector-strong -Wformat -Werror=format-security
-export FCFLAGS=-g -O2 -fdebug-prefix-map=/root=. -fstack-protector-strong
-export FFLAGS=-g -O2 -fdebug-prefix-map=/root=. -fstack-protector-strong
-export GCJFLAGS=-g -O2 -fdebug-prefix-map=/root=. -fstack-protector-strong
-export LDFLAGS=-Wl,-Bsymbolic-functions -Wl,-z,relro
-export OBJCFLAGS=-g -O2 -fdebug-prefix-map=/root=. -fstack-protector-strong -Wformat -Werror=format-security
-export OBJCXXFLAGS=-g -O2 -fdebug-prefix-map=/root=. -fstack-protector-strong -Wformat -Werror=format-security
+#export DH_VERBOSE = 1
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all reproducible=+all future=+all
+export LDFLAGS=-Wl,-Bsymbolic-functions
 
 %:
-	dh $@ --with autoreconf
+	dh $@
 
 override_dh_auto_install:
 	dh_auto_install
-	mkdir -p debian/libpka1/${LIB_DIR}/libpka1
-	mv debian/libpka1/usr/bin/* debian/libpka1/${LIB_DIR}/libpka1/
-	rmdir debian/libpka1/usr/bin/
-	mkdir -p debian/libpka1/usr/share/doc/libpka1/
-	mv debian/libpka1/usr/share/doc/pka/* debian/libpka1/usr/share/doc/libpka1/
-	rmdir debian/libpka1/usr/share/doc/pka/
-	rm debian/libpka1/${LIB_DIR}/*.la
-	mkdir -p debian/libpka1/${LIB_DIR}/$(OPENSSL_ENGINES_DIR)
-	cp debian/libpka1/${LIB_DIR}/libbfengine.so.1.1.0 debian/libpka1/${LIB_DIR}/$(OPENSSL_ENGINES_DIR)
-	dh_link /${LIB_DIR}/$(OPENSSL_ENGINES_DIR)/libbfengine.so.1.1.0 /${LIB_DIR}/$(OPENSSL_ENGINES_DIR)/pka.so
+	find $(DESTDIR) -name "*.la" -delete
