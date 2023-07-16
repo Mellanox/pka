@@ -1,5 +1,4 @@
 lib_LTLIBRARIES = libPKA.la
-
 libPKA_la_SOURCES = \
 	pka.c \
 	pka_dev.c \
@@ -8,14 +7,6 @@ libPKA_la_SOURCES = \
 	pka_queue.c \
 	../include/pka_lock.S
 
-if OPENSSL11
-libPKA_la_CFLAGS = \
-	-std=gnu99 -O3 -g -Wall -Werror -fpic \
-	-I$(top_srcdir)/include -I$(srcdir) -I/usr/include/openssl11
-else
-libPKA_la_CFLAGS = \
-	-std=gnu99 -O3 -g -Wall -Werror -fpic \
-	-I$(top_srcdir)/include -I$(srcdir)
-endif
-
-libPKA_la_LDFLAGS = -lrt -lpthread -shared -version-info 2:0:1
+libPKA_la_CFLAGS = $(PTHREAD_CFLAGS) $(LIBCRYPTO_CFLAGS)
+libPKA_la_LIBADD = $(PTHREAD_LIBS) $(LIBCRYPTO_LIBS)
+libPKA_la_LDFLAGS = -shared -version-info 2:0:1
