@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
+// SPDX-License-Identifier: BSD-3-Clause
+
 #ifndef PKA_TEST_VECTORS_H
 #define PKA_TEST_VECTORS_H
 
