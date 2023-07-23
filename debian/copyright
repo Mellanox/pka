@@ -3,7 +3,7 @@ Upstream-Name: libpka
 Source: https://github.com/Mellanox/pka
 
 Files: *
-Copyright: 2018-2023 NVIDIA Corporation & affiliates. All rights reserved.
+Copyright: 2018-2023 NVIDIA Corporation & affiliates.
 License: BSD-3-clause
 
 Files: engine/e_bluefield.c

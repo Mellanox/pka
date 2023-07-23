@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
+// SPDX-License-Identifier: BSD-3-Clause
 
 #include <ctype.h>
 #include <errno.h>
