@@ -1,6 +1,13 @@
 %global _hardened_build 1
 
+%if 0%{?rhel} < 8
+%global openssl_ver 11
+%global engine_symlink %{_libdir}/openssl/engines/libpka.so
+%global configure_flags --with-libcrypto=libcrypto11 LIBCRYPTO_LIBS="-l:libcrypto.so.1.1"
+%endif
+
 Name: libpka
+Epoch: 1
 Version: 2.0
 Release: 1%{?dist}
 Summary: Nvidia BlueField Public Key Acceleration (PKA) library
@@ -11,13 +18,8 @@ Source: %{name}-%{version}.tar.gz
 
 ExclusiveArch: aarch64
 BuildRequires: automake, autoconf, doxygen, pkgconfig
-%if 0%{?rhel} > 7
-BuildRequires: openssl-devel
-Requires: openssl-libs
-%else
-BuildRequires: openssl11-devel
-Requires: openssl11-libs
-%endif
+BuildRequires: openssl%{?openssl_ver}-devel
+Requires: openssl%{?openssl_ver}-libs
 
 %description
 This package provides Public Key Acceleration (PKA) API implementation for Nvidia BlueField
@@ -34,14 +36,7 @@ Provides header files for linking with libpka
 Summary: OpenSSL dynamic engine for Nvidia BlueField PKA
 Group: Development/Libraries
 ExclusiveArch: aarch64
-Requires: %{name} = %{epoch}:%{version}-%{release}
-%if 0%{?rhel} > 7
-BuildRequires: openssl-devel
-Requires: openssl-libs
-%else
-BuildRequires: openssl11-devel
-Requires: openssl11-libs
-%endif
+Requires: %{name} = %{epoch}:%{version}-%{release}, openssl%{?openssl_ver}-libs
 
 %description engine
 This package provides OpenSSL dynamic engine component to support hardware implementation of
@@ -68,17 +63,19 @@ Provides libpka API documentation and PDF API specification for libpka package
 
 %build
 autoreconf -fiv
-%if 0%{?rhel} > 7
-%configure
-%else
-%configure --with-libcrypto=libcrypto11
-%endif
-
+%configure --docdir=%{_pkgdocdir} %{?configure_flags}
 %make_build
 
 %install
 %make_install
 find %{buildroot} -name "*.la" -delete
+#Create engine symlink because strongswan openssl.cnf tries to load library in different places depending on disto
+%if 0%{?rhel} < 8
+%{__mkdir_p} %{dirname:%{buildroot}%{engine_symlink}}
+%{__ln_s} %{_libdir}/engines-1.1/libbfengine.so %{buildroot}%{engine_symlink}
+%else
+%{__ln_s} libbfengine.so `find %{buildroot}%{_libdir} -iname 'libbfengine.so' -printf '%%h/pka.so'`
+%endif
 
 %files
 %defattr(-, root, root)
@@ -90,7 +87,8 @@ find %{buildroot} -name "*.la" -delete
 %defattr(-, root, root)
 %license %{_pkgdocdir}/COPYING
 %doc %{_pkgdocdir}/README.engine
-%{_libdir}/engine*/*.so*
+%{_libdir}/engine*/*.so
+%{?engine_symlink}
 
 %files testutils
 %defattr(-, root, root)
