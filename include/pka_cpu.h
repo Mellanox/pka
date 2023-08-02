@@ -133,7 +133,7 @@ static inline uint64_t pka_cpu_rdvct(void)
 /// vary.
 ///
 /// @note This call is easily portable to any ARM architecture, however,
-/// it may be damn slow and inprecise for some tasks.
+/// it may be damn slow and imprecise for some tasks.
 static inline uint64_t pka_cpu_cycles(void)
 {
 #ifdef PKA_AARCH_64

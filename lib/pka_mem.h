@@ -147,7 +147,7 @@ uint32_t pka_mem_in_use_size(uint32_t ring_id, uint16_t offset);
 bool pka_mem_is_full(uint32_t ring_id, uint32_t data_size);
 
 /// Allocate data memory. Add a contiguous memory chunk where vectors can be
-/// instanciated. It returns the offset of the allocated memory.
+/// instantiated. It returns the offset of the allocated memory.
 uint16_t pka_mem_alloc(uint32_t ring_id, uint32_t size);
 
 /// Free data memory. Clear the memory entries from mapping list, free the

@@ -28,7 +28,7 @@ typedef struct
 
     uint32_t mem_index;    ///< Memory region index.
     uint64_t mem_size;     ///< Memory region size (bytes).
-    uint64_t mem_offset;   ///< Memeory region offset from start of device fd.
+    uint64_t mem_offset;   ///< Memory region offset from start of device fd.
 } pka_dev_region_info_t;
 #define PKA_RING_GET_REGION_INFO _IOWR(PKA_IOC_TYPE, 0x0, pka_dev_region_info_t)
 

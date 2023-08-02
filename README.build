@@ -19,7 +19,7 @@ code PKA-based applications.
 
 
 ===============================================================================
-Dependancies
+Dependencies
 ===============================================================================
 
 Building PK library, documentation and tests requires the following:
@@ -65,7 +65,7 @@ Building PK library, documentation and tests requires the following:
 Important Notes
 ===============================================================================
 
-  * The PKA libraries and drivers should be already installed witin the
+  * The PKA libraries and drivers should be already installed within the
     given Linux distribution;
 
         On poky and CentOS, the PKA library is installed into

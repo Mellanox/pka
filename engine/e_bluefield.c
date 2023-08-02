@@ -224,7 +224,7 @@ static int
 engine_pka_ecdsa_verify_sig(const unsigned char *dgst, int dgst_len,
                             const ECDSA_SIG *sig, EC_KEY *eckey);
 
-/* OpennSSL ECDSA placeholders */
+/* OpenSSL ECDSA placeholders */
 int (*ossl_sign)(int type, const unsigned char *dgst, int dlen, unsigned char
                  *sig, unsigned int *siglen, const BIGNUM *kinv,
                  const BIGNUM *r, EC_KEY *eckey);

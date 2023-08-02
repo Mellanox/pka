@@ -58,7 +58,7 @@ static void pka_ring_dec_rslt_cnt(pka_ring_info_t *ring, uint64_t dec)
 }
 
 // The function checks to see if the PKA HW counters are properly initialized.
-// Crashes and unstability may be caused by the fact that the counters are not
+// Crashes and instability may be caused by the fact that the counters are not
 // zero, both SW and master firmware gets confused and crashes. This code tries
 // to check (repair so far) this case - either directly or by returning a value
 // which will cause the caller to try a reset.
@@ -1165,7 +1165,7 @@ pka_ring_copy_result(pka_ring_info_t *ring,
     else
     {
         // Copy first chunk of data, before reaching the end of buffer
-        // refered by 'dst_size'.
+        // referred by 'dst_size'.
         src_remain_len = (dst_idx + src_len) & (dst_size - 1);
         src_len        = dst_size - dst_idx;
         COPY_PTRS(src_addr, src_len);

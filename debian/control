@@ -56,4 +56,4 @@ Section: doc
 Depends: ${misc:Depends}
 Description: Nvidia BlueField Public Key Acceleration (PKA) library - Documentation
  This package contains libpka API documentation
- and PDF API specification for libpka packagea
+ and PDF API specification for libpka packages

@@ -1038,7 +1038,7 @@ static pka_operand_t *pka_do_mod_inv(pka_handle_t   handle,
 // Engine helper functions
 //
 
-// This functions creates a PKA handle to be used by the engine. Retruns 1
+// This functions creates a PKA handle to be used by the engine. Returns 1
 // on success, 0 on failure.
 static int pka_engine_get_handle(pka_engine_info_t *engine)
 {
@@ -1178,7 +1178,7 @@ static void pka_reset_engine(pka_engine_info_t *engine)
 }
 
 // This function returns a valid crypto engine. Otherwise, NULL pointer, if
-// there is no valid engine. During the first call, the function retrives
+// there is no valid engine. During the first call, the function retrieves
 // valid instance and handles to be used by the engine. This function is not
 // thread-safe.
 static pka_engine_info_t* pka_get_engine(void)
@@ -1219,7 +1219,7 @@ static void pka_put_engine(void)
     engine->valid = false;
 }
 
-// This function initializes a crypto engine. Retruns 1 on success, 0 on
+// This function initializes a crypto engine. Returns 1 on success, 0 on
 // failure.
 static int pka_init_engine(void)
 {

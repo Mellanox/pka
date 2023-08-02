@@ -13,7 +13,7 @@
 /// Rings are used as a communication mechanism between ARM cores (controller)
 /// and the farm engines controlled by EIP-154 master firmware.
 ///
-/// Note that the API defines data stuctures and functions to manage rings
+/// Note that the API defines data structures and functions to manage rings
 /// within window RAM, and to enqueue/dequeue descriptors. Rings are considered
 /// as a memory of descriptors (command/result descriptors) using finite size
 /// circular queue and a couple of control status registers (count registers).
@@ -197,7 +197,7 @@ typedef struct
 {
     int         fd;             ///< file descriptor.
     int         group;          ///< iommu group.
-    int         container;      ///< vfio cointainer
+    int         container;      ///< vfio container
 
     uint32_t    idx;            ///< ring index.
     uint32_t    ring_id;        ///< hardware ring identifier.
@@ -210,8 +210,8 @@ typedef struct
     uint64_t    reg_addr;       ///< count registers region address.
     uint64_t    reg_size;       ///< count registers region size.
 
-    void       *mem_ptr;        ///< pointer to map-ped memory region.
-    void       *reg_ptr;        ///< pointer to map-ped counters region.
+    void       *mem_ptr;        ///< pointer to mapped memory region.
+    void       *reg_ptr;        ///< pointer to mapped counters region.
 
     pka_ring_desc_t ring_desc;  ///< ring descriptor.
 
@@ -224,13 +224,13 @@ typedef struct
 
 typedef struct
 {
-    uint32_t  dst_offset;        ///< operands desctination offset.
+    uint32_t  dst_offset;        ///< operands destination offset.
     uint32_t  max_dst_offset;    ///< operands end offset.
 
     pka_ring_info_t *ring;
 } pka_ring_alloc_t;
 
-// This sturcture encapsulates 'user data' information, it also includes
+// This structure encapsulates 'user data' information, it also includes
 // additional information useful for command processing and statistics.
 typedef struct
 {

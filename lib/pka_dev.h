@@ -54,7 +54,7 @@
 /// Device resource structure
 typedef struct
 {
-    void    *ioaddr;         ///< (iore)map-ped version of addr, for
+    void    *ioaddr;         ///< (iore)mapped version of addr, for
                              ///  driver internal use.
 
     uint64_t base;           ///< base address of the device's
@@ -94,7 +94,7 @@ typedef struct
     pka_dev_shim_t         *shim;           ///< pointer to the shim associated
                                             ///  to the ring.
 
-    uint32_t                resources_num;  ///< number of ring ressources.
+    uint32_t                resources_num;  ///< number of ring resources.
     pka_dev_ring_res_t      resources;      ///< ring resources.
 
     pka_dev_hw_ring_info_t *ring_info;      ///< ring information.
@@ -285,7 +285,7 @@ bool pka_dev_has_trng(pka_dev_shim_t *shim);
 #endif // __KERNEL__
 
 /// Open the file descriptor associated with ring. It returns an integer value,
-/// which is used to refer to the file. If un-successful, it returns a negative
+/// which is used to refer to the file. If unsuccessful, it returns a negative
 /// error.
 int pka_dev_open_ring(pka_ring_info_t *ring_info);
 
