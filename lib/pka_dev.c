@@ -1715,7 +1715,7 @@ static int pka_dev_ram_zeroize(pka_dev_res_t *ext_csr_ptr)
     return 0;
 }
 
-// Initialize PKA IO block refered to as shim. It configures shim's
+// Initialize PKA IO block referred to as shim. It configures shim's
 // parameters and prepare resources by mapping corresponding memory.
 // The function also configures shim registers and load firmware to
 // shim internal rams. The pka_dev_shim_t passed as input is also an
@@ -2371,7 +2371,7 @@ int pka_dev_get_ring_info(pka_ring_info_t *ring_info)
 
 
 // Returns a prefix associated to the given ring. Note that prefix is set
-// according to either the linux device-tree (DT) and the ACPI tables.
+// according to either the Linux device-tree (DT) and the ACPI tables.
 static char *pka_dev_get_ring_prefix(uint32_t ring_id, bool dt)
 {
     switch(ring_id)

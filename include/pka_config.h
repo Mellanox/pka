@@ -6,7 +6,7 @@
 
 #include "pka_addrs.h"
 
-// The maximum number of PKA shims refered to as IO blocks.
+// The maximum number of PKA shims referred to as IO blocks.
 #define PKA_MAX_NUM_IO_BLOCKS           24
 // The maximum number of Rings supported by IO block (shim).
 #define PKA_MAX_NUM_IO_BLOCK_RINGS      4

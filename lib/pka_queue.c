@@ -40,7 +40,7 @@ pka_queue_t *pka_queue_create(ssize_t size, uint32_t flags, void *mem)
     q = (pka_queue_t *) mem;
     memset(q, 0, sizeof(*q));
 
-    // The current implemetation supports simple producer/consumer.
+    // The current implementation supports simple producer/consumer.
     // We set then the queue flags to a default value.
     q->flags     = flags;
 
@@ -165,7 +165,7 @@ static void pka_rm_rslt_zero_pad(pka_operand_t *result)
 }
 
 // Determine total memory needed in the window ram for the command and the
-// result operands. The lenght is computed in bytes.
+// result operands. The length is computed in bytes.
 static uint32_t pka_operands_len(pka_opcode_t  opcode,
                                  uint32_t      shift_cnt,
                                  pka_operand_t operands[])

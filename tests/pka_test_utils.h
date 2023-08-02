@@ -226,7 +226,7 @@ typedef struct
 
 // There is one *_test_kind_t for kind of test currently being run.  Typically
 // there is only one pka_test_kind_t object, but this system allows the
-// capability of having mixed tests running siumultaneously (subject to
+// capability of having mixed tests running simultaneously (subject to
 // certain constraints) using multiple test_kind_t objects.
 typedef struct
 {
@@ -243,7 +243,7 @@ typedef struct
 // There is a test_desc_t for each unique set of test_operands.
 // There can be many test_desc_t objects for each test_kind.  The test_category
 // determines the type of the test_kind.  The test_kind, in turn determines
-// the numthe type of the test_operands and answer.
+// the type of the test_operands and answer.
 typedef struct
 {
     test_category_t test_category;  // Determines the test_kind type.

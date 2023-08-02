@@ -5,13 +5,13 @@
 /// @file
 ///
 /// This file forms an interface to the BlueField PK Accelerator based
-/// on EIP-154.   The API is refered to  as "northbound interface" for
+/// on EIP-154.   The API is referred to  as "northbound interface" for
 /// communication between user application and PKA hardware Rings.
 ///
 /// The PKA hardware makes available a number of basic arithmetic (e.g.,
-/// add and multipy) and complex arithmetic (e.g., modular exponentiation
+/// add and multiply) and complex arithmetic (e.g., modular exponentiation
 /// and modular inversion) as well as high-level operations such as RSA,
-/// Diffie-Hallman, Elliptic Curve Cryptography, and the Federal Digital
+/// Diffie-Hellman, Elliptic Curve Cryptography, and the Federal Digital
 /// Signature Algorithm (DSA as documented in FIPS 186) public-private key
 /// systems.
 ///
@@ -438,7 +438,7 @@ int pka_subtract(pka_handle_t   handle,
                  pka_operand_t* value,
                  pka_operand_t* subtrahend);
 
-/// Big Integer Add/Substract combination.
+/// Big Integer Add/Subtract combination.
 ///
 /// This functions computes "value + addend - subtrahend".
 ///
@@ -664,7 +664,7 @@ int pka_rsa(pka_handle_t   handle,
 /// modular exponentiation, plus a big integer subtraction, multiplication and
 /// addition.
 /// Since the performance of the modular exponentiation is very roughly cubic
-/// in the size of the operands, each smaller modular exponentation runs roughly
+/// in the size of the operands, each smaller modular exponentiation runs roughly
 /// 4 times faster (but there are now twice as many of them), and in total can
 /// give a 3x speed up.
 ///
@@ -993,7 +993,7 @@ int pka_ecdh(pka_handle_t   handle,
 /// @param base_pt_order The big integer number such that when base_pt is
 ///                      multiplied by this number (i.e. using pka_ecc_multiply
 ///                      above) the result is 1.
-/// @param private_key   The big integer used as the private key.  Refered to
+/// @param private_key   The big integer used as the private key.  Referred to
 ///                      as alpha in the FIPS-186 spec.
 /// @param hash          The hash (using one of SHA hash algorithms) of the
 ///                      message. Also called the message digest.
@@ -1057,7 +1057,7 @@ typedef struct
 ///                       representing a cryptographically secure digital
 ///                       signature.
 /// @param no_write       if 0 process signature verification with write-back,
-///                       else process signature verfication without write-back.
+///                       else process signature verification without write-back.
 ///
 /// @return              0 on success, a negative error code on failure.
 int pka_ecdsa_signature_verify(pka_handle_t     handle,
@@ -1089,8 +1089,8 @@ int pka_ecdsa_signature_verify(pka_handle_t     handle,
 /// @param user_data   Opaque user pointer that is returned with the result.
 /// @param p           A big prime number.
 /// @param q           A big prime number that divides 'p-1'.
-/// @param g           A big integer, also refered to as the generator.
-/// @param private_key A big integer used as the private key.  Refered to as
+/// @param g           A big integer, also referred to as the generator.
+/// @param private_key A big integer used as the private key.  Referred to as
 ///                    alpha in the FIPS-186 spec.
 /// @param hash        The hash (using one of SHA hash algorithms) of the
 ///                    message. Also called the message digest.
@@ -1129,8 +1129,8 @@ int pka_dsa_signature_generate(pka_handle_t   handle,
 /// @param user_data      Opaque user pointer that is returned with the result.
 /// @param p              A big prime number.
 /// @param q              A big prime number that divides 'p-1'.
-/// @param g              A big integer, also refered to as the generator.
-/// @param public_key     A big integer used as the public key.  Refered to as
+/// @param g              A big integer, also referred to as the generator.
+/// @param public_key     A big integer used as the public key.  Referred to as
 ///                       alpha in the FIPS-186 spec.
 /// @param hash           The hash (using one of SHA hash algorithms) of the
 ///                       message. Also called the message digest.
@@ -1139,7 +1139,7 @@ int pka_dsa_signature_generate(pka_handle_t   handle,
 ///                       representing a cryptographically secure digital
 ///                       signature.
 /// @param no_write       if 0 process signature verification with write-back,
-///                       else process signature verfication without write-back.
+///                       else process signature verification without write-back.
 ///
 /// @return               0 on success, a negative error code on failure.
 int pka_dsa_signature_verify(pka_handle_t     handle,

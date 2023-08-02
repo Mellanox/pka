@@ -253,7 +253,7 @@ static void pka_mem_remove_chunk_from_avail(pka_mem_desc_t *data_mem,
 }
 
 /// Allocate memory chunk for vectors in the data memory. Remove chunk from
-/// the Free List and make it avialable.
+/// the Free List and make it available.
 static pka_mem_idx_t pka_mem_alloc_chunk(pka_mem_desc_t *data_mem)
 {
     pka_mem_idx_t    chunk_idx;
@@ -451,8 +451,8 @@ static __pka_noinline bool pka_mem_BestFit_search(pka_mem_desc_t *data_mem,
     return false;
 }
 
-/// Search an avialable list matching the size. It calls a Best-Fit search
-/// algorithm first, if an available non-emptty list is not found, loop over
+/// Search an available list matching the size. It calls a Best-Fit search
+/// algorithm first, if an available non-empty list is not found, loop over
 /// lists from largest to smallest. This function returns the index of the
 /// available chunk.
 static __pka_inline pka_mem_idx_t pka_mem_lookup_avail(pka_mem_desc_t *data_mem,

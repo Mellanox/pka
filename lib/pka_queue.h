@@ -93,7 +93,7 @@ typedef struct // 40 bytes.
     uint8_t   shift_cnt;      // shift value used by the PK command.
 
     uint64_t  user_data;      // opaque user data information address.
-    uint32_t  opcode;         // code of the requeted PK command.
+    uint32_t  opcode;         // code of the requested PK command.
     uint32_t  operands_len;   // aligned and padded data vectors size. It
                               // refers to size of both command and result
                               // operands.
