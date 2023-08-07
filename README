@@ -99,14 +99,14 @@ Basic directory structure
 
 The directory is structured as follow:
 
-documentation/
+doc/html/
+  API reference documentation
+
+doc/pdf/
   Documentation related to the BlueField PKA hardware and software
   specification. It also provides details about the architecture,
   the design and the implementation of the API. It covers most of
   the API concepts in case customers wish to use it directly.
-
-doc/
-  Configuration file for doxygen documentation.
 
 engine/
   Source file of the OpenSSL engine and its associated helper
@@ -152,7 +152,7 @@ calls and features support.
 
 In general you can build:
 
-    ./autogen.sh
+    autoreconf -ifv
     ./configure
 
 Use 'make' to build PKA library and PKA API documentation; 'make install'

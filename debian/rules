@@ -7,8 +7,7 @@ export LDFLAGS=-Wl,-Bsymbolic-functions
 %:
 	dh $@
 
-override_dh_auto_install:
-	dh_auto_install
-	find $(CURDIR)/debian/ -name "*.la" -delete
 #Create engine symlink because strongswan openssl.cnf tries to load library in different places depending on distro
+execute_after_dh_auto_install:
+	find $(CURDIR)/debian/ -name "*.la" -delete
 	ln -s "libbfengine.so" `find $(CURDIR)/debian/ -iname 'libbfengine.so' -printf '%h/pka.so'`
