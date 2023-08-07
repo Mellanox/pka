@@ -9,7 +9,7 @@ AM_INIT_AUTOMAKE([foreign no-define subdir-objects])
 AC_CANONICAL_HOST
 AC_MSG_CHECKING([host architecture])
 AS_IF(
-    [test x"${host_cpu}" == x"aarch64"],
+    [test x"$host_cpu" = x"aarch64"],
     [AC_MSG_RESULT([ok])],
     [AC_MSG_ERROR([only aarch64 is supported])]
 )
@@ -38,33 +38,33 @@ AC_CHECK_FUNCS([gettimeofday memset munmap strcasecmp strrchr strtol])
 
 AX_PTHREAD
 
-
 LT_INIT([shared disable-static pic-only])
 
-enabled_subdirs=lib
+ENABLED_SUBDIRS=lib
 
 dnl Checks for tests utils
 AC_ARG_ENABLE([testutils],
-    [AS_HELP_STRING([--enable-testutils], [Disable building PKA tests utilities])]
-)
+    [AS_HELP_STRING([--disable-testutils], [Disable building PKA tests utilities (Default: yes)])],
+    [],
+    [enable_testutils=yes])
 
 AS_IF([test x"$enable_testutils" != x"no"],
-    [enabled_subdirs="$enabled_subdirs tests"]
+    [ENABLED_SUBDIRS="$ENABLED_SUBDIRS tests"]
 )
 
 dnl Checks if need to enable openssl pka engine
 AC_ARG_WITH([libcrypto],
     [AS_HELP_STRING([--with-libcrypto], [Build PKA openssl engine if libcrypto is present and have version no less than 1.1. This requires pkg-config program and pc file for libcrypto (Default: libcrypto)])],
-    [with_libcrypto="${withval}"],
-    [with_libcrypto="libcrypto"])
+    [],
+    [with_libcrypto=libcrypto])
 
-AS_IF([test x"with_libcrypto" != x"no"],
+AS_IF([test x"$with_libcrypto" != x"no"],
     [PKG_CHECK_MODULES([LIBCRYPTO],
-        ["${with_libcrypto}" >= 1.1.0],[],
+        ["$with_libcrypto" >= 1.1.0],[],
         [AC_MSG_ERROR([libcrypto library is either not found or its version less than 1.1 (to disable use --without-libcrypto)])]
     )
-    enabled_subdirs="$enabled_subdirs engine"
-    cryptoenginesdir="`$PKG_CONFIG --variable=enginesdir --silence-errors ${with_libcrypto}`"
+    ENABLED_SUBDIRS="$ENABLED_SUBDIRS engine"
+    cryptoenginesdir=$($PKG_CONFIG --variable=enginesdir --silence-errors $with_libcrypto)
 
     AC_SUBST([cryptoenginesdir])
     AC_SUBST([LIBCRYPTO_CFLAGS])
@@ -72,22 +72,23 @@ AS_IF([test x"with_libcrypto" != x"no"],
     ]
 )
 
-
 dnl Documentation
 AC_ARG_WITH([doxygen],
-    [AS_HELP_STRING([--with-doxygen], [Generate documentation. This requires doxygen program (Default: yes)])],
+    [AS_HELP_STRING([--with-doxygen], [Generate documentation. This requires doxygen program (Default: doxygen)])],
     [],
-    [with_doxygen=yes])
+    [with_doxygen=doxygen])
 
-AC_PATH_TOOL([DOXYGEN],[doxygen])
-
-AS_IF([test x"$with_doxygen" != x"no" -a x"$DOXYGEN" != x""],
-    [enabled_subdirs="$enabled_subdirs doc"],
-    [AC_MSG_ERROR([doxygen not found (to disable use --without-doxygen)])]
+AS_IF([test x"$with_doxygen" != x"no"],
+    [AC_PATH_TOOL([DOXYGEN],["$with_doxygen"])
+    AS_IF([test x"$DOXYGEN" = x""],
+        [AC_MSG_ERROR([documentation requested but doxygen is not found (to disable use --without-doxygen)])]
+    )
+    ENABLED_SUBDIRS="$ENABLED_SUBDIRS doc"
+    AC_SUBST([DOXYGEN])
+    ]
 )
 
-AC_SUBST([DOXYGEN])
 AC_SUBST([AM_CPPFLAGS],["-I\$(top_srcdir)/lib -I\$(top_srcdir)/include"])
-AC_SUBST([ENABLED_SUBDIRS],[$enabled_subdirs])
+AC_SUBST([ENABLED_SUBDIRS])
 AC_CONFIG_FILES([Makefile lib/Makefile engine/Makefile tests/Makefile doc/Makefile])
 AC_OUTPUT

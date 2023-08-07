@@ -52,7 +52,7 @@ Building PK library, documentation and tests requires the following:
     Libraries currently required to link: openssl
 
     OpenSSL is needed to build the dynamically-loadable BlueField PKA
-    engine. Note that OpenSSL 1.0 and 1.1 are both supported. Earlier
+    engine. Note that OpenSSL 1.1 and higher is required. Earlier
     versions may or may not work.
 
   4. Doxygen documentation
@@ -80,7 +80,7 @@ How to build
 
   1. Build PKA software and documentation:
 
-        # ./autogen.sh
+        # autoreconf -ivf
         # ./configure
         # make
         # make install
@@ -113,7 +113,7 @@ How to build
 
     To build the PKA software:
 
-        $ ./autogen.sh
+        $ autoreconf -ivf
         $ ./configure --host=aarch64-poky-linux --prefix=<pka_install_dir>
         $ make
         $ make install
@@ -124,9 +124,9 @@ How to build
     and run the tests suite.
 
     By default, tests suite support is enabled, run 'configure' script
-    with option '--disable-tests' to disable it:
+    with option '--disable-testutils' to disable it:
 
-        # ./configure --disable-tests
+        # ./configure --disable-testutils
 
   4. Build PKA engine
 
@@ -134,6 +134,6 @@ How to build
     load and run OpenSSL applications with BlueField PKA engine.
 
     By default, engine support is enabled, run 'configure' script with
-    option '--disable-engine' to disable it:
+    option '--without-libcrypto' to disable it:
 
-        # ./configure --disable-engine
+        # ./configure --without-libcrypto

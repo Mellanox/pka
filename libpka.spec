@@ -1,4 +1,5 @@
 %global _hardened_build 1
+%{!?rhel: %global rhel 8}
 
 %if 0%{?rhel} < 8
 %global openssl_ver 11
@@ -10,19 +11,19 @@ Name: libpka
 Epoch: 1
 Version: 2.0
 Release: 1%{?dist}
-Summary: Nvidia BlueField Public Key Acceleration (PKA) library
+Summary: NVIDIA BlueField Public Key Acceleration (PKA) library
 Group: Development/Libraries
 License: BSD-3-Clause AND OpenSSL
 URL: https://github.com/Mellanox/pka
 Source: %{name}-%{version}.tar.gz
 
 ExclusiveArch: aarch64
-BuildRequires: automake, autoconf, doxygen, pkgconfig
+BuildRequires: automake, autoconf, doxygen, libtool, pkgconfig
 BuildRequires: openssl%{?openssl_ver}-devel
 Requires: openssl%{?openssl_ver}-libs
 
 %description
-This package provides Public Key Acceleration (PKA) API implementation for Nvidia BlueField
+This package provides Public Key Acceleration (PKA) API implementation for NVIDIA BlueField
 
 %package devel
 Summary: Development files for libpka
@@ -33,7 +34,7 @@ Requires: %{name} = %{epoch}:%{version}-%{release}
 Provides header files for linking with libpka
 
 %package engine
-Summary: OpenSSL dynamic engine for Nvidia BlueField PKA
+Summary: OpenSSL dynamic engine for NVIDIA BlueField PKA
 Group: Development/Libraries
 ExclusiveArch: aarch64
 Requires: %{name} = %{epoch}:%{version}-%{release}, openssl%{?openssl_ver}-libs
@@ -43,13 +44,13 @@ This package provides OpenSSL dynamic engine component to support hardware imple
 RSA, DSA, DH, ECDH and ECDSA operations with the BlueField PKA hardware.
 
 %package testutils
-Summary: Test utilities for Nvidia BlueField PKA
+Summary: Test utilities for NVIDIA BlueField PKA
 Group: Development/Libraries
 ExclusiveArch: aarch64
 Requires: %{name} = %{epoch}:%{version}-%{release}
 
 %description testutils
-This package provides validation utilities for testing libpka functionality with Nvidia BlueField PKA hardware.
+This package provides validation utilities for testing libpka functionality with NVIDIA BlueField PKA hardware.
 
 %package doc
 Summary: Documentation for libpka package
