@@ -1,7 +1,6 @@
-Copyright (c) 2016-2018, Mellanox Technologies
-All rights reserved.
+© 2023 NVIDIA Corporation & affiliates.
 
-License: BSD
+License: BSD-3-Clause
 
 BlueField PKA API 1.0
 Mellanox BlueField Public Key Acceleration (PKA) Package
@@ -21,7 +20,7 @@ PKA-based applications.
 The PKA software package consists of (1) an API specification, which
 is the application writer's view (this is also intended to provide
 complete interfaces to use with OpenSSL), (2) an API implementation
-for BlueField, (3) validation test suite, an independant set of
+for BlueField, (3) validation test suite, an independent set of
 test routines that run against the API implementation and verifies
 that it correctly implements all of the defined APIs at a functional
 level, and (4) a dynamic OpenSSL engine component to support RSA
@@ -35,7 +34,7 @@ Important notes
 * The BlueField PKA software is intended for BlueField products that
   support the crypto-enabled feature (High Bin/Crypto BlueField chip).
 
-    To verify whether the Bluefield chip has crypto capabilities,
+    To verify whether the BlueField chip has crypto capabilities,
     contact Mellanox or check the CPU flags; 'aes', 'sha1', and
     'sha2' must be present.
 
@@ -67,7 +66,7 @@ Important notes
 
 * The BlueField PKA software requires the MLXBF PKA kernel module
   to be installed; the kernel module is referred to as 'pka-mlxbf';
-  it should be provided as part of the BlueField Sotware Distrbution.
+  it should be provided as part of the BlueField Software Distribution.
 
     To verify whether the MLXBF PKA driver is installed:
 
@@ -100,14 +99,14 @@ Basic directory structure
 
 The directory is structured as follow:
 
-documentation/
+doc/html/
+  API reference documentation
+
+doc/pdf/
   Documentation related to the BlueField PKA hardware and software
   specification. It also provides details about the architecture,
   the design and the implementation of the API. It covers most of
   the API concepts in case customers wish to use it directly.
-
-doc/
-  Configuration file for doxygen documentation.
 
 engine/
   Source file of the OpenSSL engine and its associated helper
@@ -153,12 +152,12 @@ calls and features support.
 
 In general you can build:
 
-    ./autogen.sh
+    autoreconf -ifv
     ./configure
 
 Use 'make' to build PKA library and PKA API documentation; 'make install'
 will copy all required binary files to the install directory.
 
-Note that verifications tests and OpenSSL engine are built separately,
+Note that verification tests and OpenSSL engine are built separately,
 if needed. Use 'make' and 'make install' to build and install the tests
 executables and the dynamically-loadable engine module.

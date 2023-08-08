@@ -1,0 +1,8 @@
+PROJECT_NAME     = "Public Key Acceleration Library Reference Guide"
+PROJECT_NUMBER   = $(PKGVER)
+OUTPUT_DIRECTORY = $(DOCDIR)
+INPUT            = $(SRCDIR)/lib/pka.h
+EXTRACT_ALL      = YES
+QUIET            = YES
+HTML_OUTPUT      = $(HTML_OUTPUT)
+GENERATE_LATEX   = NO
