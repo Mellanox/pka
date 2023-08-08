@@ -1,14 +1,60 @@
 Source: libpka
-Section: libs
+Section: libdevel
 Priority: optional
-Maintainer: Mellanox Technologies <support@mellanox.com>
-Build-Depends: debhelper (>=11~), pkg-config, libssl-dev
+Maintainer: Shih-Yi Chen <shihyic@nvidia.com>
+Build-Depends: debhelper-compat (= 11),
+               libssl-dev,
+               autoconf,
+               automake,
+               libtool,
+               doxygen,
+               pkg-config
 Standards-Version: 4.1.4
 Homepage: https://github.com/Mellanox/pka
 
 Package: libpka1
 Architecture: arm64
-Multi-Arch: same
+Section: libs
 Depends: ${misc:Depends}, ${shlibs:Depends}
-Description: User-space library and openssl engine for
- Mellanox PK acceleration.
+Description: NVIDIA BlueField Public Key Acceleration (PKA) library
+ This package provides Public Key Acceleration (PKA) API implementation
+ for NVIDIA BlueField
+
+Package: libpka1-engine
+Architecture: arm64
+Section: libs
+Depends: libpka1 (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: NVIDIA BlueField Public Key Acceleration (PKA) library - OpenSSL engine module
+ This package provides OpenSSL dynamic engine module to support
+ hardware implementation of  RSA, DSA, DH, ECDH and ECDSA
+ operations using BlueField PKA hardware
+
+Package: libpka1-testutils
+Architecture: arm64
+Section: misc
+Depends: libpka1 (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: NVIDIA BlueField Public Key Acceleration (PKA) library - Test utilities
+ This package provides validation utilities for testing libpka
+ functionality with NVIDIA BlueField PKA hardware
+
+Package: libpka1-dev
+Architecture: any
+Multi-Arch: same
+Section: libdevel
+Depends: libpka1 (= ${binary:Version}),
+         ${misc:Depends}
+Description: NVIDIA BlueField Public Key Acceleration (PKA) library - Headers
+ This package contains header files for libpka
+
+Package: libpka1-doc
+Architecture: all
+Multi-Arch: foreign
+Section: doc
+Depends: ${misc:Depends}
+Description: NVIDIA BlueField Public Key Acceleration (PKA) library - Documentation
+ This package contains libpka API documentation
+ and PDF API specification for libpka packages

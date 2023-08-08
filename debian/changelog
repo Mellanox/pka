@@ -6,7 +6,7 @@ libpka (2.0-1) UNRELEASED; urgency=low
   * Add dedicated polling thread for asynchronous PKA processing.
   * Bug fixes
 
- -- Shih-Yi Chen <shihyic@nvidia.com>  Mon, 11 Apr 2023 14:26:58 +0000
+ -- Shih-Yi Chen <shihyic@nvidia.com>  Tue, 11 Apr 2023 14:26:58 +0000
 libpka (1.4-1) UNRELEASED; urgency=low
 
   * Guard against multiple calls to engine destroy function.

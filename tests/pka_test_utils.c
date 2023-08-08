@@ -1,3 +1,5 @@
+// SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
+// SPDX-License-Identifier: BSD-3-Clause
 
 #include <ctype.h>
 #include <errno.h>
@@ -1799,7 +1801,7 @@ static pka_comparison_t pki_internal_compare(uint8_t *value_buf_ptr,
 
 
 /// This function, returns 1 if the given value is less than or equal to
-/// the curve prime.  Specifically will return 0 for curve25519 iff the value
+/// the curve prime.  Specifically will return 0 for curve25519 if the value
 /// is between 2^255 - 19 and 2^255 - 1.  For curve448, it will return 0 iff
 /// the value is between 2^448 - 2^224 - 1 and 2^448 - 1.  Note that it is
 /// exceedingly rare for this function to return 0 on random inputs.

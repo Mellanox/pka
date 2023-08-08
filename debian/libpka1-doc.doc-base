@@ -1,0 +1,13 @@
+Document: libpka-reference
+Title: Public Key Acceleration documentation
+Author: Khalil Blaiech <kblaiech@mellanox.com>
+Abstract: Reference documentation of Public Key Acceleration system
+ and API description of Public Key Acceleration Library
+Section: Programming
+
+Format: HTML
+Index: /usr/share/doc/libpka*/html/index.html
+Files: /usr/share/doc/libpka*/html/*.html
+
+Format: PDF
+Files: /usr/share/doc/libpka*/pdf/*.pdf

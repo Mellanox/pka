@@ -1,7 +1,6 @@
-Copyright (c) 2016-2018, Mellanox Technologies
-All rights reserved.
+© 2023 NVIDIA Corporation & affiliates.
 
-License: BSD
+License: BSD-3-Clause
 
 BlueField PKA Tests Suite
 
@@ -13,7 +12,7 @@ Overview
 ===============================================================================
 
 The BlueField PKA Tests Suite consists of a set of tests application, an
-independant set of test routines that run against the API implementation
+independent set of test routines that run against the API implementation
 and verifies that it correctly implements all of the defined APIs at a
 functional level.
 
@@ -98,7 +97,7 @@ Example of usage:
     # ./pka_test_perforamce -c MOD_EXP -e little -k 1 -m 100 -n 4 -q 10 \
     > -t 1 -o 1 -v 0 -y no
 
-  syntax: pka_test_perforamce OPTIONS
+  syntax: pka_test_performance OPTIONS
 
   Where OPTIONS can be:
 

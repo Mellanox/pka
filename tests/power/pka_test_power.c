@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
+// SPDX-License-Identifier: BSD-3-Clause
+
 #define _GNU_SOURCE
 
 #include <stdint.h>

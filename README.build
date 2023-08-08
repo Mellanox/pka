@@ -1,7 +1,6 @@
-Copyright (c) 2016-2018, Mellanox Technologies
-All rights reserved.
+© 2023 NVIDIA Corporation & affiliates.
 
-License: BSD
+License: BSD-3-Clause
 
 BlueField PKA API 1.0
 
@@ -20,7 +19,7 @@ code PKA-based applications.
 
 
 ===============================================================================
-Dependancies
+Dependencies
 ===============================================================================
 
 Building PK library, documentation and tests requires the following:
@@ -53,7 +52,7 @@ Building PK library, documentation and tests requires the following:
     Libraries currently required to link: openssl
 
     OpenSSL is needed to build the dynamically-loadable BlueField PKA
-    engine. Note that OpenSSL 1.0 and 1.1 are both supported. Earlier
+    engine. Note that OpenSSL 1.1 and higher is required. Earlier
     versions may or may not work.
 
   4. Doxygen documentation
@@ -66,7 +65,7 @@ Building PK library, documentation and tests requires the following:
 Important Notes
 ===============================================================================
 
-  * The PKA libraries and drivers should be already installed witin the
+  * The PKA libraries and drivers should be already installed within the
     given Linux distribution;
 
         On poky and CentOS, the PKA library is installed into
@@ -81,7 +80,7 @@ How to build
 
   1. Build PKA software and documentation:
 
-        # ./autogen.sh
+        # autoreconf -ivf
         # ./configure
         # make
         # make install
@@ -114,7 +113,7 @@ How to build
 
     To build the PKA software:
 
-        $ ./autogen.sh
+        $ autoreconf -ivf
         $ ./configure --host=aarch64-poky-linux --prefix=<pka_install_dir>
         $ make
         $ make install
@@ -125,9 +124,9 @@ How to build
     and run the tests suite.
 
     By default, tests suite support is enabled, run 'configure' script
-    with option '--disable-tests' to disable it:
+    with option '--disable-testutils' to disable it:
 
-        # ./configure --disable-tests
+        # ./configure --disable-testutils
 
   4. Build PKA engine
 
@@ -135,6 +134,34 @@ How to build
     load and run OpenSSL applications with BlueField PKA engine.
 
     By default, engine support is enabled, run 'configure' script with
-    option '--disable-engine' to disable it:
+    option '--without-libcrypto' to disable it:
 
-        # ./configure --disable-engine
+        # ./configure --without-libcrypto
+
+===============================================================================
+Building packages
+===============================================================================
+
+5 deb packages are generated: libpka1, libpka1-engine, libpka1-testutils, libpka1-dev, libpka1-doc.
+
+libpka1 - main package that contains libPKA.so library
+libpka1-engine - package that contains OpenSSL engine
+libpka1-testutils - contains test utilities (pka_test_validation pka_test_performance)
+libpka1-dev - contains header files for libPKA.so library
+libpka1-doc - contains documentation
+
+DEB packages:
+
+For deb packages build is done using standard Debian tools such as dpkg-buildpackages, debuild or using debian/rules
+Example of building deb package. Command should be run from source root:
+
+    $ dpkg-buildpackage -b -uc -us
+
+RPM packages:
+
+RPM packages are build using rpmbuild.
+Example of building rpm package. Command should be run from source root:
+
+    $ rpmdev-setuptree
+    $ tar -cvzp --show-transformed --transform 's,^\.,./libpka-2.0,' --file /root/rpmbuild/SOURCES/libpka-2.0.tar.gz --exclude='.git*' .
+    $ rpmbuild -bb libpka.spec

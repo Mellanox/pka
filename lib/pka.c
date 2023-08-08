@@ -1,35 +1,5 @@
-//
-//   BSD LICENSE
-//
-//   Copyright(c) 2016 Mellanox Technologies, Ltd. All rights reserved.
-//   All rights reserved.
-//
-//   Redistribution and use in source and binary forms, with or without
-//   modification, are permitted provided that the following conditions
-//   are met:
-//
-//     * Redistributions of source code must retain the above copyright
-//       notice, this list of conditions and the following disclaimer.
-//     * Redistributions in binary form must reproduce the above copyright
-//       notice, this list of conditions and the following disclaimer in
-//       the documentation and/or other materials provided with the
-//       distribution.
-//     * Neither the name of Mellanox Technologies nor the names of its
-//       contributors may be used to endorse or promote products derived
-//       from this software without specific prior written permission.
-//
-//   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-//   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-//   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-//   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-//   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-//   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-//   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-//   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-//   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-//   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-//   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+// SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
+// SPDX-License-Identifier: BSD-3-Clause
 
 #define _GNU_SOURCE
 #include <stdlib.h>
@@ -116,7 +86,7 @@ void pka_stats_print(uint8_t queue_num, uint32_t cmd_num)
 }
 
 // Capture overhead cycles -i.e. cycles needed to prepare a command for
-// processing and enqueue in HW rings. It includes the waiting cyles in
+// processing and enqueue in HW rings. It includes the waiting cycles in
 // a SW command queue before the command get processed.
 static __pka_inline void pka_stats_overhead_cycles_cnt(uint8_t queue_num,
                                                        uint32_t cmd_num)
@@ -137,7 +107,7 @@ static __pka_inline void pka_stats_overhead_cycles_cnt(uint8_t queue_num,
     }
 }
 
-// Capture processing cylces -i.e. cycles needed to process commands starting
+// Capture processing cycles -i.e. cycles needed to process commands starting
 // from HW ring enqueue to result enqueue in SW queue.
 static __pka_inline void pka_stats_processing_cycles_cnt(uint8_t queue_num,
                                                          uint32_t cmd_num)
@@ -1141,7 +1111,7 @@ static void pka_parse_result(pka_queue_rslt_desc_t *rslt_desc,
     results->compare_result = rslt_desc->compare_result;
 }
 
-// Acknowledgement for returned result.
+// Acknowledgment for returned result.
 static void pka_result_ack(pka_local_info_t *local_info)
 {
     if (local_info->req_num > 0)
@@ -1214,7 +1184,7 @@ int pka_get_result(pka_handle_t handle, pka_results_t *results)
     return FAILURE;
 }
 
-// Return if there is a avilable results.
+// Return if there is a available results.
 bool pka_has_avail_result(pka_handle_t handle)
 {
     pka_local_info_t  *local_info;
@@ -1244,7 +1214,7 @@ bool pka_has_avail_result(pka_handle_t handle)
     return false;
 }
 
-// Return the number of outstanding command requets.
+// Return the number of outstanding command requests.
 uint32_t pka_request_count(pka_handle_t handle)
 {
     pka_local_info_t *local_info;
@@ -1987,7 +1957,7 @@ int pka_modular_inverse(pka_handle_t   handle,
 }
 
 /// This function, returns 1 if the given value is less than or equal to
-/// the curve prime.  Specifically will return 0 for curve25519 iff the value
+/// the curve prime.  Specifically will return 0 for curve25519 if the value
 /// is between 2^255 - 19 and 2^255 - 1.  For curve448, it will return 0 iff
 /// the value is between 2^448 - 2^224 - 1 and 2^448 - 1.  Note that it is
 /// exceedingly rare for this function to return 0 on random inputs.

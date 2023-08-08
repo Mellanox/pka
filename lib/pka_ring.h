@@ -1,35 +1,5 @@
-//
-//   BSD LICENSE
-//
-//   Copyright(c) 2016 Mellanox Technologies, Ltd. All rights reserved.
-//   All rights reserved.
-//
-//   Redistribution and use in source and binary forms, with or without
-//   modification, are permitted provided that the following conditions
-//   are met:
-//
-//     * Redistributions of source code must retain the above copyright
-//       notice, this list of conditions and the following disclaimer.
-//     * Redistributions in binary form must reproduce the above copyright
-//       notice, this list of conditions and the following disclaimer in
-//       the documentation and/or other materials provided with the
-//       distribution.
-//     * Neither the name of Mellanox Technologies nor the names of its
-//       contributors may be used to endorse or promote products derived
-//       from this software without specific prior written permission.
-//
-//   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-//   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-//   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-//   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-//   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-//   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-//   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-//   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-//   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-//   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-//   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-//
+// SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
+// SPDX-License-Identifier: BSD-3-Clause
 
 #ifndef __PKA_RING_H__
 #define __PKA_RING_H__
@@ -43,7 +13,7 @@
 /// Rings are used as a communication mechanism between ARM cores (controller)
 /// and the farm engines controlled by EIP-154 master firmware.
 ///
-/// Note that the API defines data stuctures and functions to manage rings
+/// Note that the API defines data structures and functions to manage rings
 /// within window RAM, and to enqueue/dequeue descriptors. Rings are considered
 /// as a memory of descriptors (command/result descriptors) using finite size
 /// circular queue and a couple of control status registers (count registers).
@@ -227,7 +197,7 @@ typedef struct
 {
     int         fd;             ///< file descriptor.
     int         group;          ///< iommu group.
-    int         container;      ///< vfio cointainer
+    int         container;      ///< vfio container
 
     uint32_t    idx;            ///< ring index.
     uint32_t    ring_id;        ///< hardware ring identifier.
@@ -240,8 +210,8 @@ typedef struct
     uint64_t    reg_addr;       ///< count registers region address.
     uint64_t    reg_size;       ///< count registers region size.
 
-    void       *mem_ptr;        ///< pointer to map-ped memory region.
-    void       *reg_ptr;        ///< pointer to map-ped counters region.
+    void       *mem_ptr;        ///< pointer to mapped memory region.
+    void       *reg_ptr;        ///< pointer to mapped counters region.
 
     pka_ring_desc_t ring_desc;  ///< ring descriptor.
 
@@ -254,13 +224,13 @@ typedef struct
 
 typedef struct
 {
-    uint32_t  dst_offset;        ///< operands desctination offset.
+    uint32_t  dst_offset;        ///< operands destination offset.
     uint32_t  max_dst_offset;    ///< operands end offset.
 
     pka_ring_info_t *ring;
 } pka_ring_alloc_t;
 
-// This sturcture encapsulates 'user data' information, it also includes
+// This structure encapsulates 'user data' information, it also includes
 // additional information useful for command processing and statistics.
 typedef struct
 {

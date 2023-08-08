@@ -1,57 +1,94 @@
-AC_INIT([pka], [2.0], [shihyic@nvidia.com])
-AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
+AC_PREREQ([2.69])
+m4_define([libpka_VERSION], [2.0])
+AC_INIT([libpka], m4_defn([libpka_VERSION]), [networking-support@nvidia.com], [libpka-]m4_defn([libpka_VERSION]), [https://github.com/Mellanox/pka])
+AC_CONFIG_SRCDIR([engine/e_bluefield.c])
+AC_CONFIG_AUX_DIR([build-aux])
+AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_HEADERS([config.h])
+AM_INIT_AUTOMAKE([foreign no-define subdir-objects])
+AC_CANONICAL_HOST
+AC_MSG_CHECKING([host architecture])
+AS_IF(
+    [test x"$host_cpu" = x"aarch64"],
+    [AC_MSG_RESULT([ok])],
+    [AC_MSG_ERROR([only aarch64 is supported])]
+)
 
 AC_PROG_CC
+AC_PROG_INSTALL
 AM_PROG_AS
-AM_PROG_AR
-AM_PROG_CC_C_O
+PKG_PROG_PKG_CONFIG
 
-LT_INIT([shared disable-static])
+AC_CHECK_HEADERS([fcntl.h inttypes.h stdint.h sys/ioctl.h sys/time.h unistd.h])
+AC_CHECK_HEADER_STDBOOL
+AC_C_INLINE
+AC_TYPE_INT32_T
+AC_TYPE_INT64_T
+AC_TYPE_INT8_T
+AC_TYPE_PID_T
+AC_TYPE_SIZE_T
+AC_TYPE_SSIZE_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT32_T
+AC_TYPE_UINT64_T
+AC_TYPE_UINT8_T
+AC_FUNC_MALLOC
+AC_FUNC_MMAP
+AC_CHECK_FUNCS([gettimeofday memset munmap strcasecmp strrchr strtol])
 
-dnl Checks for doxygen
-AC_CHECK_PROGS([DOXYGEN], [doxygen])
-if test -z "$DOXYGEN";
-   then AC_MSG_WARN([Doxygen not found])
-fi
-AM_CONDITIONAL([HAVE_DOXYGEN], [test -n "$DOXYGEN"])
-AM_COND_IF([HAVE_DOXYGEN], [AC_CONFIG_FILES([doc/Doxyfile])])
+AX_PTHREAD
 
-dnl Checks for openssl
-AC_ARG_ENABLE([engine],
-              [AS_HELP_STRING([--disable-engine],
-                              [Disable support for PKA engine])],
-              [],
-              [enable_engine=yes])
-FOUND_SSL_LIB="no"
-if test "x$enable_engine" != xno;
-   then
-    AC_SEARCH_LIBS([crypto], CRYPTO_new_ex_data, [],
-                   [AC_MSG_WARN([can't find library 'crypto'])])
-    AC_CHECK_LIB([ssl], [OPENSSL_init_ssl], [FOUND_SSL_LIB="yes"])
-    AC_CHECK_LIB([ssl], [SSL_library_init], [FOUND_SSL_LIB="yes"])
-    AC_CHECK_FILE(/usr/include/openssl11, OPENSSLV=11, [])
-    AS_IF([test "x$FOUND_SSL_LIB" = xno],
-            AC_MSG_ERROR([can't find library 'ssl']))
-fi
+LT_INIT([shared disable-static pic-only])
 
-AM_CONDITIONAL(OPENSSL11, test "x$OPENSSLV" = x11)
-AM_CONDITIONAL([HAVE_SSL_LIB], [test "x$FOUND_SSL_LIB" = xyes])
-AM_COND_IF([HAVE_SSL_LIB], [AC_CONFIG_FILES([engine/Makefile])])
+ENABLED_SUBDIRS=lib
 
-dnl Checks for tests suite
-AC_ARG_ENABLE([tests],
-              AS_HELP_STRING([--disable-tests],
-                             [Disable support for PKA tests]),
-              [],
-              [enable_tests=yes])
-AM_CONDITIONAL([MAKE_TESTS], [test "x$enable_tests" != xno])
-AM_COND_IF([MAKE_TESTS], [AC_CONFIG_FILES([tests/Makefile])])
+dnl Checks for tests utils
+AC_ARG_ENABLE([testutils],
+    [AS_HELP_STRING([--disable-testutils], [Disable building PKA tests utilities (Default: yes)])],
+    [],
+    [enable_testutils=yes])
 
-AC_CONFIG_HEADERS([config.h])
+AS_IF([test x"$enable_testutils" != x"no"],
+    [ENABLED_SUBDIRS="$ENABLED_SUBDIRS tests"]
+)
 
-AC_CONFIG_FILES([
-  Makefile
-  lib/Makefile
-  doc/Makefile
-])
+dnl Checks if need to enable openssl pka engine
+AC_ARG_WITH([libcrypto],
+    [AS_HELP_STRING([--with-libcrypto], [Build PKA openssl engine if libcrypto is present and have version no less than 1.1. This requires pkg-config program and pc file for libcrypto (Default: libcrypto)])],
+    [],
+    [with_libcrypto=libcrypto])
+
+AS_IF([test x"$with_libcrypto" != x"no"],
+    [PKG_CHECK_MODULES([LIBCRYPTO],
+        ["$with_libcrypto" >= 1.1.0],[],
+        [AC_MSG_ERROR([libcrypto library is either not found or its version less than 1.1 (to disable use --without-libcrypto)])]
+    )
+    ENABLED_SUBDIRS="$ENABLED_SUBDIRS engine"
+    cryptoenginesdir=$($PKG_CONFIG --variable=enginesdir --silence-errors $with_libcrypto)
+
+    AC_SUBST([cryptoenginesdir])
+    AC_SUBST([LIBCRYPTO_CFLAGS])
+    AC_SUBST([LIBCRYPTO_LIBS])
+    ]
+)
+
+dnl Documentation
+AC_ARG_WITH([doxygen],
+    [AS_HELP_STRING([--with-doxygen], [Generate documentation. This requires doxygen program (Default: doxygen)])],
+    [],
+    [with_doxygen=doxygen])
+
+AS_IF([test x"$with_doxygen" != x"no"],
+    [AC_PATH_TOOL([DOXYGEN],["$with_doxygen"])
+    AS_IF([test x"$DOXYGEN" = x""],
+        [AC_MSG_ERROR([documentation requested but doxygen is not found (to disable use --without-doxygen)])]
+    )
+    ENABLED_SUBDIRS="$ENABLED_SUBDIRS doc"
+    AC_SUBST([DOXYGEN])
+    ]
+)
+
+AC_SUBST([AM_CPPFLAGS],["-I\$(top_srcdir)/lib -I\$(top_srcdir)/include"])
+AC_SUBST([ENABLED_SUBDIRS])
+AC_CONFIG_FILES([Makefile lib/Makefile engine/Makefile tests/Makefile doc/Makefile])
 AC_OUTPUT
