@@ -137,3 +137,31 @@ How to build
     option '--without-libcrypto' to disable it:
 
         # ./configure --without-libcrypto
+
+===============================================================================
+Building packages
+===============================================================================
+
+5 deb packages are generated: libpka1, libpka1-engine, libpka1-testutils, libpka1-dev, libpka1-doc.
+
+libpka1 - main package that contains libPKA.so library
+libpka1-engine - package that contains OpenSSL engine
+libpka1-testutils - contains test utilities (pka_test_validation pka_test_performance)
+libpka1-dev - contains header files for libPKA.so library
+libpka1-doc - contains documentation
+
+DEB packages:
+
+For deb packages build is done using standard Debian tools such as dpkg-buildpackages, debuild or using debian/rules
+Example of building deb package. Command should be run from source root:
+
+    $ dpkg-buildpackage -b -uc -us
+
+RPM packages:
+
+RPM packages are build using rpmbuild.
+Example of building rpm package. Command should be run from source root:
+
+    $ rpmdev-setuptree
+    $ tar -cvzp --show-transformed --transform 's,^\.,./libpka-2.0,' --file /root/rpmbuild/SOURCES/libpka-2.0.tar.gz --exclude='.git*' .
+    $ rpmbuild -bb libpka.spec
