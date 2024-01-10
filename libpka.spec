@@ -1,5 +1,5 @@
 Name: libpka
-Version: 2.0
+Version: 1.4
 Release: 1%{?dist}
 Summary: Nvidia BlueField Public Key Acceleration (PKA) Package
 
