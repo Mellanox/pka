@@ -1,4 +1,4 @@
-libpka (2.0-1) UNRELEASED; urgency=low
+libpka (2.0-2) UNRELEASED; urgency=low
 
   * Add BF3 MB, HB cards support.
   * Add OpenSSL async_jobs support.
