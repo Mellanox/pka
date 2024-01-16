@@ -3,7 +3,6 @@
 
 %if 0%{?rhel} < 8
 %global openssl_ver 11
-%global engine_symlink %{_libdir}/openssl/engines/libpka.so
 %global configure_flags --with-libcrypto=libcrypto11 LIBCRYPTO_LIBS="-l:libcrypto.so.1.1"
 %endif
 
@@ -70,13 +69,7 @@ autoreconf -fiv
 %install
 %make_install
 find %{buildroot} -name "*.la" -delete
-#Create engine symlink because strongswan openssl.cnf tries to load library in different places depending on disto
-%if 0%{?rhel} < 8
-%{__mkdir_p} %{dirname:%{buildroot}%{engine_symlink}}
-%{__ln_s} %{_libdir}/engines-1.1/libbfengine.so %{buildroot}%{engine_symlink}
-%else
 %{__ln_s} libbfengine.so `find %{buildroot}%{_libdir} -iname 'libbfengine.so' -printf '%%h/pka.so'`
-%endif
 
 %files
 %defattr(-, root, root)
@@ -89,7 +82,6 @@ find %{buildroot} -name "*.la" -delete
 %license %{_pkgdocdir}/COPYING
 %doc %{_pkgdocdir}/README.engine
 %{_libdir}/engine*/*.so
-%{?engine_symlink}
 
 %files testutils
 %defattr(-, root, root)
