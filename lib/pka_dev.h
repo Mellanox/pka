@@ -148,11 +148,9 @@ typedef struct
 typedef struct
 {
     pka_dev_res_t    buffer_ram;        // buffer RAM
-    pka_dev_res_t    master_prog_ram;   // master controller program RAM
     pka_dev_res_t    master_seq_ctrl;   // master sequencer controller CSR
     pka_dev_res_t    aic_csr;           // interrupt controller CSRs
     pka_dev_res_t    trng_csr;          // TRNG module CSRs
-    pka_dev_res_t    ext_csr;           // MiCA specific CSRs (glue logic)
 } pka_dev_shim_res_t;
 
 #define PKA_DEV_SHIM_RES_CNT         6  // Number of PKA device resources

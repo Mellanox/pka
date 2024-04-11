@@ -102,38 +102,6 @@
 //  bit is write-only and self clearing and can only be set if the ‘Reset’
 //  bit [31] is ‘1’.
 #define PKA_MASTER_SEQ_CTRL_CLEAR_COUNTERS_VAL  0x40000000
-//  Bit [8] in the PKA Master Sequencer Control/Status Register is tied to
-//  the 'pka_master_irq interrupt' on the EIP-154 interrupt controller.
-#define PKA_MASTER_SEQ_CTRL_MASTER_IRQ_BIT      8
-//  Sequencer status bits are used by the Master controller Sequencer to
-//  reflect status. Bit [0] is tied to the 'pka_master_irq' interrupt on
-//  the EIP-154 interrupt controller.
-#define PKA_MASTER_SEQ_CTRL_STATUS_BYTE         0x01
-// 'pka_master_irq' mask for the Master controller Sequencer Status Register.
-#define PKA_MASTER_SEQ_CTRL_MASTER_IRQ_MASK     0x100
-
-// Advanced Interrupt Controller (AIC) configuration
-//  AIC Polarity Control Register is used to set each individual interrupt
-//  signal (High Level / Rising Edge) during the initialization phase.
-//   '0' = Low level or falling edge.
-//   '1' = High level or rising edge.
-#define PKA_AIC_POL_CTRL_REG_VAL                0x000FFFFF
-//  AIC Type Control Register is used to set each interrupt to level or edge.
-//   '0' = Level.
-//   '1' = Edge.
-#define PKA_AIC_TYPE_CTRL_REG_VAL               0x000FFFFF
-//  AIC Enable Control Register is used to enable interrupt inputs.
-//   '0' = Disabled.
-//   '1' = Enabled.
-#define PKA_AIC_ENABLE_CTRL_REG_VAL             0x000F030F
-//  AIC Enabled Status Register bits reflect the status of the interrupts
-//  gated with the enable bits of the AIC_ENABLE_CTRL Register.
-//   '0' = Inactive.
-//   '1' = Pending.
-#define PKA_AIC_ENABLE_STAT_REG_VAL             0x000F030F
-
-// 'pka_master_irq' mask for the AIC Enabled Status Register.
-#define PKA_AIC_ENABLED_STAT_MASTER_IRQ_MASK    0x100
 
 // PKA_RING_OPTIONS field to specify the priority in which rings are handled:
 //  '00' = full rotating priority,
