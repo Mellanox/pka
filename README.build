@@ -134,9 +134,9 @@ How to build
     load and run OpenSSL applications with BlueField PKA engine.
 
     By default, engine support is enabled, run 'configure' script with
-    option '--without-libcrypto' to disable it:
+    option '--disable-engine' to disable it:
 
-        # ./configure --without-libcrypto
+        # ./configure --disable-engine
 
 ===============================================================================
 Building packages
