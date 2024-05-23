@@ -52,23 +52,26 @@ AS_IF([test x"$enable_testutils" != x"no"],
     [ENABLED_SUBDIRS="$ENABLED_SUBDIRS tests"]
 )
 
-dnl Checks if need to enable openssl pka engine
 AC_ARG_WITH([libcrypto],
-    [AS_HELP_STRING([--with-libcrypto], [Build PKA openssl engine if libcrypto is present and have version no less than 1.1. This requires pkg-config program and pc file for libcrypto (Default: libcrypto)])],
+    [AS_HELP_STRING([--with-libcrypto], [Use specific libcrypto library. Must be at least version 1.1. Library search is done using pkg-config. (Default: libcrypto)])],
     [],
     [with_libcrypto=libcrypto])
 
-AS_IF([test x"$with_libcrypto" != x"no"],
-    [PKG_CHECK_MODULES([LIBCRYPTO],
-        ["$with_libcrypto" >= 1.1.0],[],
-        [AC_MSG_ERROR([libcrypto library is either not found or its version less than 1.1 (to disable use --without-libcrypto)])]
-    )
-    ENABLED_SUBDIRS="$ENABLED_SUBDIRS engine"
-    cryptoenginesdir=$($PKG_CONFIG --variable=enginesdir --silence-errors $with_libcrypto)
+PKG_CHECK_MODULES([LIBCRYPTO],
+    ["$with_libcrypto" >= 1.1.0],[],
+    [AC_MSG_ERROR([libcrypto library is either not found or its version less than 1.1])])
 
+dnl Checks if need to enable openssl pka engine
+AC_ARG_ENABLE([engine],
+    [AS_HELP_STRING([--disable-engine], [Build PKA openssl engine (Default: yes)])],
+    [],
+    [enable_engine=yes])
+
+AS_IF([test x"$enable_engine" != x"no"],
+    [ENABLED_SUBDIRS="$ENABLED_SUBDIRS engine"
+
+    cryptoenginesdir=$($PKG_CONFIG --variable=enginesdir --silence-errors $with_libcrypto)
     AC_SUBST([cryptoenginesdir])
-    AC_SUBST([LIBCRYPTO_CFLAGS])
-    AC_SUBST([LIBCRYPTO_LIBS])
     ]
 )
 
