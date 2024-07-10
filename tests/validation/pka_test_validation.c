@@ -809,7 +809,8 @@ static void BasicTest(thread_args_t *args,
                       basic_fcn_t    fcn,
                       uint32_t       left_idx,
                       uint32_t       right_idx,
-                      uint32_t       correct_idx)
+                      uint32_t       correct_idx,
+                      uint32_t       request_idx)
 {
     pka_operand_t     *left, *right, *correct, *inputs[2], *result;
     pka_results_t      results;
@@ -821,6 +822,9 @@ static void BasicTest(thread_args_t *args,
     right   = test_operands[right_idx];
     correct = test_operands[correct_idx];
 
+    // use thread ID + request_idx to uniquely identify a request among 
+    // validation tests of multiple threads.
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = fcn(args->handle, args->user_data, left, right);
     if (rc != RC_NO_ERROR)
     {
@@ -836,7 +840,12 @@ static void BasicTest(thread_args_t *args,
 
     if (pka_request_count(args->handle))
     {
-        while (FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         // We should define a timer here, so that we don't get stuck
         // indefinitely when the test fails to retrieve a result.
         if (rc == RC_NO_ERROR)
@@ -850,7 +859,6 @@ static void BasicTest(thread_args_t *args,
         }
     }
 
-
     inputs[0] = left;
     inputs[1] = right;
     TestFailed(args, __func__, pki_fcn_name, inputs, 2, rc, result, correct);
@@ -861,7 +869,8 @@ static void ShiftTest(thread_args_t *args,
                       shift_fcn_t    fcn,
                       uint32_t       operand_idx,
                       uint32_t       shift_cnt,
-                      uint32_t       correct_idx)
+                      uint32_t       correct_idx,
+                      uint32_t       request_idx)
 {
     pka_operand_t       *operand, *correct, *result;
     pka_results_t       results;
@@ -872,6 +881,7 @@ static void ShiftTest(thread_args_t *args,
     operand = test_operands[operand_idx];
     correct = test_operands[correct_idx];
 
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = fcn(args->handle, args->user_data, operand, shift_cnt);
     if (rc != RC_NO_ERROR)
     {
@@ -885,7 +895,12 @@ static void ShiftTest(thread_args_t *args,
 
     if (pka_request_count(args->handle))
     {
-        while(FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         // We should define a timer here, so that we don't get stuck
         // indefinitely when the test fails to retrieve a result.
         if (rc == RC_NO_ERROR)
@@ -906,7 +921,8 @@ static void DhTest(thread_args_t *args,
                    uint32_t       value_idx,
                    uint32_t       exponent_idx,
                    uint32_t       modulus_idx,
-                   uint32_t       correct_idx)
+                   uint32_t       correct_idx,
+                   uint32_t       request_idx)
 {
     pka_operand_t      *value, *exponent, *modulus, *correct, *result, *inputs[3];
     pka_results_t       results;
@@ -919,6 +935,7 @@ static void DhTest(thread_args_t *args,
     modulus  = test_operands[modulus_idx];
     correct  = test_operands[correct_idx];
 
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = DH(args->handle, args->user_data, exponent, modulus, value);
     if (rc != RC_NO_ERROR)
     {
@@ -935,7 +952,12 @@ static void DhTest(thread_args_t *args,
 
     if (pka_request_count(args->handle))
     {
-        while(FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         // We should define a timer here, so that we don't get stuck
         // indefinitely when the test fails to retrieve a result.
         if (rc == RC_NO_ERROR)
@@ -959,7 +981,8 @@ static void ModExpTest(thread_args_t *args,
                        uint32_t       value_idx,
                        uint32_t       exponent_idx,
                        uint32_t       modulus_idx,
-                       uint32_t       correct_idx)
+                       uint32_t       correct_idx,
+                       uint32_t       request_idx)
 {
     pka_operand_t *value, *exponent, *modulus, *correct, *result, *inputs[3];
     pka_results_t       results;
@@ -972,6 +995,7 @@ static void ModExpTest(thread_args_t *args,
     modulus  = test_operands[modulus_idx];
     correct  = test_operands[correct_idx];
 
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = MOD_EXP(args->handle, args->user_data, exponent, modulus, value);
     if (rc != RC_NO_ERROR)
     {
@@ -988,7 +1012,12 @@ static void ModExpTest(thread_args_t *args,
 
     if (pka_request_count(args->handle))
     {
-        while(FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         // We should define a timer here, so that we don't get stuck
         // indefinitely when the test fails to retrieve a result.
         if (rc == RC_NO_ERROR)
@@ -1011,7 +1040,8 @@ static void ModExpTest(thread_args_t *args,
 static void ModExpWithCrtTest(thread_args_t *args,
                               rsa_system_t  *rsa,
                               uint32_t       msg_idx,
-                              uint32_t       correct_idx)
+                              uint32_t       correct_idx,
+                              uint32_t       request_idx)
 {
     pka_operand_t       *msg, *correct, *result, *inputs[3];
     pka_results_t       results;
@@ -1022,6 +1052,7 @@ static void ModExpWithCrtTest(thread_args_t *args,
     msg     = test_operands[msg_idx];
     correct = test_operands[correct_idx];
 
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = MOD_EXP_WITH_CRT(args->handle, args->user_data,
                             msg, rsa->p, rsa->q, rsa->dp, rsa->dq, rsa->qInv);
     if (rc != RC_NO_ERROR)
@@ -1037,7 +1068,12 @@ static void ModExpWithCrtTest(thread_args_t *args,
 
     if (pka_request_count(args->handle))
     {
-        while(FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         // We should define a timer here, so that we don't get stuck
         // indefinitely when the test fails to retrieve a result.
         if (rc == RC_NO_ERROR)
@@ -1060,7 +1096,8 @@ static void EccAddTest(thread_args_t *args,
                        ecc_curve_t   *curve,
                        uint32_t       pointA_idx,
                        uint32_t       pointB_idx,
-                       uint32_t       correct_idx)
+                       uint32_t       correct_idx,
+                       uint32_t       request_idx)
 {
     pka_operand_t      *inputs[4];
     pka_result_code_t   rc;
@@ -1072,6 +1109,7 @@ static void EccAddTest(thread_args_t *args,
     pointB  = test_ecc_points[pointB_idx];
     correct = test_ecc_points[correct_idx];
 
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = ECC_ADD(args->handle, args->user_data, curve, pointA, pointB);
     if (rc != RC_NO_ERROR)
     {
@@ -1088,7 +1126,12 @@ static void EccAddTest(thread_args_t *args,
     init_operand(&results.results[1], &y_buf[0], MAX_BUF, 0);
     if (pka_request_count(args->handle))
     {
-        while(FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         // We should define a timer here, so that we don't get stuck
         // indefinitely when the test fails to retrieve a result.
         result.x = results.results[0];
@@ -1115,7 +1158,8 @@ static void EccMultiplyTest(thread_args_t *args,
                             ecc_curve_t   *curve,
                             uint32_t       pointA_idx,
                             uint32_t       multiplier_idx,
-                            uint32_t       correct_idx)
+                            uint32_t       correct_idx,
+                            uint32_t       request_idx)
 {
     pka_operand_t       *multiplier, *inputs[3];
     pka_result_code_t    rc;
@@ -1127,6 +1171,7 @@ static void EccMultiplyTest(thread_args_t *args,
     multiplier = test_operands[multiplier_idx];
     correct    = test_ecc_points[correct_idx];
 
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = ECC_MULTIPLY(args->handle, args->user_data, curve, pointA, multiplier);
     if (rc != RC_NO_ERROR)
     {
@@ -1142,7 +1187,12 @@ static void EccMultiplyTest(thread_args_t *args,
     init_operand(&results.results[1], &y_buf[0], MAX_BUF, 0);
     if (pka_request_count(args->handle))
     {
-        while(FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         // We should define a timer here, so that we don't get stuck
         // indefinitely when the test fails to retrieve a result.
         result.x = results.results[0];
@@ -1168,7 +1218,8 @@ static void EcdhTest(thread_args_t *args,
                      ecc_curve_t   *curve,
                      uint32_t       point_idx,
                      uint32_t       private_key_idx,
-                     uint32_t       correct_idx)
+                     uint32_t       correct_idx,
+                     uint32_t       request_idx)
 {
     pka_operand_t       *private_key, *inputs[3];
     pka_result_code_t    rc;
@@ -1180,6 +1231,7 @@ static void EcdhTest(thread_args_t *args,
     private_key = test_operands[private_key_idx];
     correct     = test_ecc_points[correct_idx];
 
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = ECDH(args->handle, args->user_data, curve, point, private_key);
     if (rc != RC_NO_ERROR)
     {
@@ -1195,7 +1247,12 @@ static void EcdhTest(thread_args_t *args,
     init_operand(&results.results[1], &y_buf[0], MAX_BUF, 0);
     if (pka_request_count(args->handle))
     {
-        while(FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         // We should define a timer here, so that we don't get stuck
         // indefinitely when the test fails to retrieve a result.
         result.x = results.results[0];
@@ -1225,7 +1282,8 @@ static void EcdsaTest(thread_args_t *args,
                       uint32_t       public_key_idx,
                       uint32_t       hash_idx,
                       uint32_t       k_idx,
-                      uint32_t       correct_sig_idx)
+                      uint32_t       correct_sig_idx,
+                      uint32_t       request_idx)
 {
     dsa_signature_t      generate_sig, verify_sig, *correct_sig;
     pka_operand_t       *private_key, *hash, *k, *inputs[5];
@@ -1241,6 +1299,7 @@ static void EcdsaTest(thread_args_t *args,
     k           = test_operands[k_idx];
     correct_sig = test_signatures[correct_sig_idx];
 
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = ECDSA_GENERATE(args->handle, args->user_data, curve, base_pt,
                         base_pt_order, private_key, hash, k);
     if (rc != RC_NO_ERROR)
@@ -1257,7 +1316,12 @@ static void EcdsaTest(thread_args_t *args,
     init_operand(&results.results[1], &s_buf[0], MAX_BUF, 0);
     if (pka_request_count(args->handle))
     {
-        while(FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         generate_sig.r = results.results[0];
         generate_sig.s = results.results[1];
         if ((rc == RC_NO_ERROR) &&
@@ -1282,7 +1346,12 @@ static void EcdsaTest(thread_args_t *args,
             init_operand(&results.results[1], &s_buf[0], MAX_BUF, 0);
             if (pka_request_count(args->handle))
             {
-                while(FAILURE == pka_get_result(args->handle, &results));
+                while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                              &results,
+                                                              args->user_data))
+                {
+                    usleep(1000);
+                };
                 verify_sig.r = results.results[0];
                 verify_sig.s = results.results[1];
                 cmp          = results.compare_result;
@@ -1318,7 +1387,8 @@ static void DsaTest(thread_args_t       *args,
                     uint32_t             public_key_idx,
                     uint32_t             hash_idx,
                     uint32_t             k_idx,
-                    uint32_t             correct_sig_idx)
+                    uint32_t             correct_sig_idx,
+                    uint32_t             request_idx)
 {
     dsa_signature_t      generate_sig, verify_sig, *correct_sig;
     pka_operand_t       *private_key, *public_key, *hash, *k, *inputs[4];
@@ -1333,6 +1403,7 @@ static void DsaTest(thread_args_t       *args,
     k           = test_operands[k_idx];
     correct_sig = test_signatures[correct_sig_idx];
 
+    args->user_data = (void *)pthread_self() + request_idx;
     rc = DSA_GENERATE(args->handle, args->user_data, &dsa_params->p,
                       &dsa_params->q, &dsa_params->g, private_key, hash, k);
     if (rc != RC_NO_ERROR)
@@ -1349,7 +1420,12 @@ static void DsaTest(thread_args_t       *args,
     init_operand(&results.results[1], &s_buf[0], MAX_BUF, 0);
     if (pka_request_count(args->handle))
     {
-        while(FAILURE == pka_get_result(args->handle, &results));
+        while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                      &results,
+                                                      args->user_data))
+        {
+            usleep(1000);
+        };
         generate_sig.r = results.results[0];
         generate_sig.s = results.results[1];
         if ((rc == RC_NO_ERROR) &&
@@ -1371,7 +1447,12 @@ static void DsaTest(thread_args_t       *args,
             init_operand(&results.results[1], &s_buf[0], MAX_BUF, 0);
             if (pka_request_count(args->handle))
             {
-                while(FAILURE == pka_get_result(args->handle, &results));
+                while (FAILURE == pka_get_result_by_user_data(args->handle, 
+                                                              &results,
+                                                              args->user_data))
+                {
+                    usleep(1000);
+                };
                 verify_sig.r = results.results[0];
                 verify_sig.s = results.results[1];
                 cmp          = results.compare_result;
@@ -1404,74 +1485,74 @@ static void DsaTest(thread_args_t       *args,
 void TestPkaAdd(thread_args_t *args)
 {
     //BasicTest(args, "pka_add", PKA_ADD, 1,  0, 1);
-    BasicTest(args, "pka_add", PKA_ADD, 1,  1, 2);
-    BasicTest(args, "pka_add", PKA_ADD, 3,  1, 4);
-    BasicTest(args, "pka_add", PKA_ADD, 4,  1, 5);
-    BasicTest(args, "pka_add", PKA_ADD, 2,  4, 6);
-    BasicTest(args, "pka_add", PKA_ADD, 5,  1, 6);
-    BasicTest(args, "pka_add", PKA_ADD, 7,  1, 8);
-    BasicTest(args, "pka_add", PKA_ADD, 16, 1, 30);
+    BasicTest(args, "pka_add", PKA_ADD, 1,  1, 2, 1);
+    BasicTest(args, "pka_add", PKA_ADD, 3,  1, 4, 2);
+    BasicTest(args, "pka_add", PKA_ADD, 4,  1, 5, 3);
+    BasicTest(args, "pka_add", PKA_ADD, 2,  4, 6, 4);
+    BasicTest(args, "pka_add", PKA_ADD, 5,  1, 6, 5);
+    BasicTest(args, "pka_add", PKA_ADD, 7,  1, 8, 6);
+    BasicTest(args, "pka_add", PKA_ADD, 16, 1, 30, 7);
 
-    BasicTest(args, "pka_add", PKA_ADD, 194, 195, 196);
+    BasicTest(args, "pka_add", PKA_ADD, 194, 195, 196, 8);
 }
 
 void TestPkaSubtract(thread_args_t *args)
 {
     //BasicTest(args, "pka_subtract", PKA_SUBTRACT, 1,  0,  1);
-    BasicTest(args, "pka_subtract", PKA_SUBTRACT, 2,  1,  1);
-    BasicTest(args, "pka_subtract", PKA_SUBTRACT, 6,  2,  4);
-    BasicTest(args, "pka_subtract", PKA_SUBTRACT, 13, 1,  12);
-    BasicTest(args, "pka_subtract", PKA_SUBTRACT, 11, 11, 0);
-    BasicTest(args, "pki_subtract", PKA_SUBTRACT, 97, 98, 99);
+    BasicTest(args, "pka_subtract", PKA_SUBTRACT, 2,  1,  1, 11);
+    BasicTest(args, "pka_subtract", PKA_SUBTRACT, 6,  2,  4, 12);
+    BasicTest(args, "pka_subtract", PKA_SUBTRACT, 13, 1,  12, 13);
+    BasicTest(args, "pka_subtract", PKA_SUBTRACT, 11, 11, 0,  14);
+    BasicTest(args, "pki_subtract", PKA_SUBTRACT, 97, 98, 99, 15);
 
-    BasicTest(args, "pki_subtract", PKA_SUBTRACT, 191, 192, 193);
+    BasicTest(args, "pki_subtract", PKA_SUBTRACT, 191, 192, 193, 16);
 }
 
 void TestPkaMultiply(thread_args_t *args)
 {
     //BasicTest(args, "pka_multiply", PKA_MULTIPLY, 1,  0,   0);
-    BasicTest(args, "pka_multiply", PKA_MULTIPLY, 9,  9,   13);
-    BasicTest(args, "pka_multiply", PKA_MULTIPLY, 16, 17,  31);
+    BasicTest(args, "pka_multiply", PKA_MULTIPLY, 9,  9,  13, 21);
+    BasicTest(args, "pka_multiply", PKA_MULTIPLY, 16, 17, 31, 22);
 
-    BasicTest(args, "pka_multiply", PKA_MULTIPLY, 188, 189,  190);
+    BasicTest(args, "pka_multiply", PKA_MULTIPLY, 188, 189, 190, 23);
 }
 
 void TestPkaModulo(thread_args_t *args)
 {
     //BasicTest(args, "pka_modulo", PKA_MODULO, 10, 8,  2);
     //BasicTest(args, "pka_modulo", PKA_MODULO, 13, 9,  0);
-    BasicTest(args, "pka_modulo", PKA_MODULO, 31, 17, 0);
+    BasicTest(args, "pka_modulo", PKA_MODULO, 31, 17, 0, 31);
     //BasicTest(args, "pka_modulo", PKA_MODULO, 18, 17, 33);
     //BasicTest(args, "pka_modulo", PKA_MODULO, 9,  6,  1);
 
-    BasicTest(args, "pka_modulo", PKA_MODULO, 185, 186, 187);
+    BasicTest(args, "pka_modulo", PKA_MODULO, 185, 186, 187, 32);
 }
 
 void TestPkaModInverse(thread_args_t *args)
 {
-    BasicTest(args, "pka_mod_inverse", PKA_MOD_INVERSE, 11, 14, 20);
-    BasicTest(args, "pka_mod_inverse", PKA_MOD_INVERSE, 7,  14, 21);
-    BasicTest(args, "pki_mod_inverse", PKA_MOD_INVERSE, 35, 36, 37);
+    BasicTest(args, "pka_mod_inverse", PKA_MOD_INVERSE, 11, 14, 20, 41);
+    BasicTest(args, "pka_mod_inverse", PKA_MOD_INVERSE, 7,  14, 21, 42);
+    BasicTest(args, "pki_mod_inverse", PKA_MOD_INVERSE, 35, 36, 37, 43);
 
-    BasicTest(args, "pki_mod_inverse", PKA_MOD_INVERSE, 182, 183, 184);
+    BasicTest(args, "pki_mod_inverse", PKA_MOD_INVERSE, 182, 183, 184, 44);
 }
 
 void TestPkaShift(thread_args_t *args)
 {
-    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  1,  16,  9);
-    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  5,  8,   9);
-    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  5,  24,  13);
-    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 9,  16,  1);
-    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 9,  8,   5);
-    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 13, 24,  5);
-    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 14, 24,  5);
+    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  1,  16,  9, 51);
+    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  5,  8,   9, 52);
+    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  5,  24,  13, 53);
+    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 9,  16,  1, 54);
+    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 9,  8,   5, 55);
+    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 13, 24,  5, 56);
+    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 14, 24,  5, 57);
 
-    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  171, 8,  175);
-    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  171, 16, 176);
-    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  171, 24, 177);
-    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 171, 8,  172);
-    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 171, 16, 173);
-    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 171, 24, 174);
+    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  171, 8,  175, 58);
+    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  171, 16, 176, 59);
+    ShiftTest(args, "pka_shift_left",  PKA_SHIFT_LEFT,  171, 24, 177, 60);
+    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 171, 8,  172, 61);
+    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 171, 16, 173, 62);
+    ShiftTest(args, "pka_shift_right", PKA_SHIFT_RIGHT, 171, 24, 174, 63);
 }
 
 void TestPkaModExp(thread_args_t *args)
@@ -1479,11 +1560,11 @@ void TestPkaModExp(thread_args_t *args)
     //ModExpTest(args, "pka_mod_exp", 5,  2,  11, 9);     // Odd modulus
     //ModExpTest(args, "pka_mod_exp", 5,  2,  6,  1);     // RC_OPERAND_LENGTH_ERR (length_a)
     //ModExpTest(args, "pka_mod_exp", 12, 11, 14, 22);    // RC_OPERAND_LENGTH_ERR (length_a)
-    ModExpTest(args, "pka_mod_exp", 16, 15, 19, 34);
+    ModExpTest(args, "pka_mod_exp", 16, 15, 19, 34, 71);
 
-    ModExpTest(args, "pka_mod_exp", 178, 179, 180, 181);
+    ModExpTest(args, "pka_mod_exp", 178, 179, 180, 181, 72);
 
-    ModExpWithCrtTest(args, RSA1024, 26, 25);
+    ModExpWithCrtTest(args, RSA1024, 26, 25, 73);
 }
 
 void TestPkaDh(thread_args_t *args)
@@ -1491,23 +1572,23 @@ void TestPkaDh(thread_args_t *args)
     // Note here that the test operand and result idx are same as that for
     // one of the ModExp test above. This is because Dh is based on 
     // Modular Exponentiation without CRT.
-    DhTest(args, 178, 179, 180, 181);
+    DhTest(args, 178, 179, 180, 181, 81);
 }
 
 void TestPkaEccAdd(thread_args_t *args)
 {
-    EccAddTest(args, P256, 1, 4, 10);
-    EccAddTest(args, P256, 4, 5, 11);
-    EccAddTest(args, P256, 5, 6, 12);
-    EccAddTest(args, P256, 4, 4, 13);
+    EccAddTest(args, P256, 1, 4, 10, 91);
+    EccAddTest(args, P256, 4, 5, 11, 92);
+    EccAddTest(args, P256, 5, 6, 12, 93);
+    EccAddTest(args, P256, 4, 4, 13, 94);
 }
 
 void TestPkaEccMultiply(thread_args_t *args)
 {
     // EccMultiplyTest(P256, 1, 2,  3);
-    EccMultiplyTest(args, P256, 4, 2,  13);
-    EccMultiplyTest(args, P256, 4, 5,  20);
-    EccMultiplyTest(args, P256, 5, 6,  21);
+    EccMultiplyTest(args, P256, 4, 2, 13, 101);
+    EccMultiplyTest(args, P256, 4, 5, 20, 102);
+    EccMultiplyTest(args, P256, 5, 6, 21, 103);
     // EccMultiplyTest(P256, 6, 10, 3);
 }
 
@@ -1516,7 +1597,7 @@ void TestPkaEcdh(thread_args_t *args)
     // Note here that the test operand and result idx are same as that for
     // Ecc multiply test above. This is because Ecdh is based on 
     // Ecc point multiplication.
-    EcdhTest(args, P256, 4, 2, 13);
+    EcdhTest(args, P256, 4, 2, 13, 111);
 }
 
 void TestEcdsa(thread_args_t *args)
@@ -1524,16 +1605,16 @@ void TestEcdsa(thread_args_t *args)
     // The following test comes from RFC4754 Section 8.1.  The indicies are
     // the private_key_idx, the public_key_idx, the hash_idx, the k_idx
     // and finally the correct signature.
-    EcdsaTest(args, P256, P256_base_pt, P256_base_pt_order, 40, 40, 41, 42, 40);
-    EcdsaTest(args, P384, P384_base_pt, P384_base_pt_order, 50, 50, 51, 52, 50);
-    EcdsaTest(args, P521, P521_base_pt, P521_base_pt_order, 60, 60, 61, 62, 60);
+    EcdsaTest(args, P256, P256_base_pt, P256_base_pt_order, 40, 40, 41, 42, 40, 121);
+    EcdsaTest(args, P384, P384_base_pt, P384_base_pt_order, 50, 50, 51, 52, 50, 122);
+    EcdsaTest(args, P521, P521_base_pt, P521_base_pt_order, 60, 60, 61, 62, 60, 123);
 }
 
 void TestDsa(thread_args_t *args)
 {
-    DsaTest(args, DSS_1024_160, 70, 71, 72, 73, 70);
-    DsaTest(args, DSS_2048_224, 80, 81, 82, 83, 80);
-    DsaTest(args, DSS_3072_256, 90, 91, 92, 93, 90);
+    DsaTest(args, DSS_1024_160, 70, 71, 72, 73, 70, 131);
+    DsaTest(args, DSS_2048_224, 80, 81, 82, 83, 80, 132);
+    DsaTest(args, DSS_3072_256, 90, 91, 92, 93, 90, 133);
 }
 
 // When application run multiple threads, this test will fail if it is called
@@ -1707,9 +1788,10 @@ int main(int argc, char *argv[])
         // Create threads one-by-one instead of all-at-once,
         // because each thread might get different arguments.
         // Calls pthread_create() for each thread
-        thread_args->cpu_num  = cpu_num;
-        thread_args->id       = worker_idx;
-        thread_args->instance = pka_instance;
+        thread_args->cpu_num   = cpu_num;
+        thread_args->id        = worker_idx;
+        thread_args->instance  = pka_instance;
+        thread_args->user_data = NULL;
         pthread_create(&thread_tbl[worker_idx], &attr,
                                thread_start_routine, (void *) thread_args);
     }
@@ -1862,9 +1944,11 @@ static void PrintInfo(char *progname, app_args_t *app_args)
 
     mask = pka_get_rings_bitmask(app_args->instance);
     printf("HW rings in use      :  ");
-    for (mask_idx = PKA_RING_NUM_BITMASK - 1; mask_idx >= 0; mask_idx--)
-        printf("%x", mask[mask_idx]);
-    printf("\n\n");
+    // PKA_RING_NUM_BITMASK is defined with total ring number + 1
+    // hence need to do -2 for initial index value
+    for (mask_idx = PKA_RING_NUM_BITMASK - 1; mask_idx > 0; mask_idx--)
+        printf("%02x:", mask[mask_idx]);
+    printf("%02x\n\n", mask[0]);
     printf("Mode:            ");
     switch (app_args->mode)
     {

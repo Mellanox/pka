@@ -3,6 +3,11 @@
 
 #include "pka_mem.h"
 
+#include <pthread.h>
+
+// Lock for memery pool is requried in multi-thread environment.
+static pthread_mutex_t *p_mutex = NULL;
+
 static pka_mem_desc_t *pka_data_mem_tbl[PKA_MAX_NUM_RINGS];
 
 // Note that the most likely request sizes for RSA are 9, 10 (1024 bit keys),
@@ -44,6 +49,27 @@ static pka_mem_desc_t *pka_data_mem_tbl[PKA_MAX_NUM_RINGS];
 //   32       160 - 175
 //   33       176 - 183
 //   34       184
+
+static int pka_mem_lock()
+{
+    int result = 0;
+    if (NULL == p_mutex)
+    {
+	p_mutex = malloc(sizeof(pthread_mutex_t));
+        pthread_mutex_init(p_mutex, NULL);
+    }
+    result = pthread_mutex_lock(p_mutex);
+    return result;
+}
+
+
+static int pka_mem_unlock()
+{
+    int result = 0;
+
+    result = pthread_mutex_unlock(p_mutex);
+    return result;
+}
 
 /// Return the list index associated with the given size (in bytes).
 static uint32_t pka_mem_get_list_index(uint32_t size)
@@ -325,6 +351,7 @@ static __pka_inline void pka_mem_no_coalesce(pka_mem_desc_t *data_mem,
 
     chunk->offset = offset;
     chunk->size   = size;
+    chunk->kind   = AVAIL_MEM;
     PKA_ASSERT((offset & ALIGN_MASK) == 0);
     pka_mem_add_chunk_to_avail(data_mem, chunk_idx);
 }
@@ -508,29 +535,6 @@ uint32_t pka_mem_largest_chunk_size(uint32_t ring_id)
     return 0;
 }
 
-/// Return the size (in bytes) of the used memory starting at the given offset.
-uint32_t pka_mem_in_use_size(uint32_t ring_id, uint16_t offset)
-{
-    pka_mem_desc_t *data_mem;
-    uint32_t        map_idx;
-    uint16_t        map;
-    uint16_t        used_size;
-    uint16_t        used_offset;
-
-    data_mem = pka_data_mem_tbl[ring_id];
-    PKA_ASSERT(data_mem != NULL);
-
-    used_offset = offset;
-    map_idx     = used_offset >> ALIGN_SHIFT;
-    PKA_ASSERT(used_offset < DATA_MEM_SIZE);
-
-    map = data_mem->mem_map_tbl[map_idx];
-    PKA_ASSERT(IS_USED_MEM(map));
-
-    used_size = USED_SIZE(map);
-
-    return used_size;
-}
 
 /// Check whether data memory is full or not.
 bool pka_mem_is_full(uint32_t ring_id, uint32_t data_size)
@@ -577,8 +581,9 @@ uint16_t pka_mem_alloc(uint32_t ring_id, uint32_t size)
     pka_mem_idx_t    chunk_idx;
     pka_mem_chunk_t *chunk;
     pka_mem_desc_t  *data_mem;
-    uint16_t         offset;
+    uint16_t         offset = 0;
 
+    pka_mem_lock();
     data_mem = pka_data_mem_tbl[ring_id];
     PKA_ASSERT(data_mem != NULL);
 
@@ -591,12 +596,12 @@ uint16_t pka_mem_alloc(uint32_t ring_id, uint32_t size)
     if ((MAX_ALLOCS <= data_mem->alloc_cnt) ||
         (data_mem->free_list.size <= 2) ||
         (DATA_MEM_SIZE <= (data_mem->alloc_bytes + size)))
-        return 0;
+        goto end;
 
     // Want to do a specific type of best fit match.
     chunk_idx = pka_mem_lookup_avail(data_mem, size);
     if (chunk_idx == 0)
-        return 0;
+        goto end;
 
     chunk  = &data_mem->chunk_tbl[chunk_idx];
     offset = chunk->offset;
@@ -632,6 +637,8 @@ uint16_t pka_mem_alloc(uint32_t ring_id, uint32_t size)
     //PKA_DEBUG(PKA_MEM, "Ring %d, allocate memory start offset=%u, "
     //                            "size=%u\n", ring_id, offset, size);
 
+end:
+    pka_mem_unlock();
     return offset;
 }
 
@@ -653,6 +660,7 @@ void pka_mem_free(uint32_t ring_id, uint16_t offset)
     if (offset == 0)
         return;
 
+    pka_mem_lock();
     data_mem = pka_data_mem_tbl[ring_id];
     PKA_ASSERT(data_mem != NULL);
 
@@ -691,13 +699,13 @@ void pka_mem_free(uint32_t ring_id, uint16_t offset)
                     pka_mem_coalesce_both(data_mem, MEM_DESC_IDX(prev_map),
                                  MEM_DESC_IDX(next_map), used_offset,
                                  used_size);
-                    return;
+                    goto end;
                 }
             }
 
             pka_mem_coalesce_preceding(data_mem, MEM_DESC_IDX(prev_map),
                               used_offset, used_size);
-            return;
+            goto end;
         }
     }
 
@@ -709,16 +717,21 @@ void pka_mem_free(uint32_t ring_id, uint16_t offset)
         {
             pka_mem_coalesce_following(data_mem, MEM_DESC_IDX(next_map),
                               used_offset, used_size);
-            return;
+            goto end;
         }
     }
 
     // If we cannot coalesce this newly freed memory with adjacent free space,
     // then just turn this into an avail chunk and add to the appropriate list.
     pka_mem_no_coalesce(data_mem, used_offset, used_size);
+
+end:
+    pka_mem_unlock();
 }
 
 /// Create a new data memory in PKA Window RAM.
+/// Called from the main thread in the context of pka_init_global hence no
+/// locking is needed.
 void pka_mem_create(uint32_t ring_id)
 {
     pka_mem_idx_t    chunk_idx;
