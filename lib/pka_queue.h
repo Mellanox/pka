@@ -141,6 +141,8 @@ typedef struct
     struct pka_queue_debug_stats stats;
 #endif
 
+    // lock is required for multi-thread environment
+    void *mutex;
     uint8_t mem[0] __pka_cache_aligned; ///< Memory space of queue starts here.
                                         /// not volatile so need to be careful
                                         /// about compiler re-ordering.
@@ -205,9 +207,10 @@ int pka_queue_cmd_dequeue(pka_queue_t            *queue,
                           pka_ring_alloc_t       *alloc);
 
 /// Dequeue a result from a queue (copy result from queue -> user context).
-int pka_queue_rslt_dequeue(pka_queue_t            *queue,
-                           pka_queue_rslt_desc_t  *rslt_desc,
-                           pka_results_t          *results);
+int pka_queue_rslt_dequeue_by_user_data(pka_queue_t            *queue,
+                                        pka_queue_rslt_desc_t  *rslt_desc,
+                                        pka_results_t          *results,
+                                        void                   *user_data);
 
 /// Set queue command descriptor.
 int pka_queue_set_cmd_desc(pka_queue_cmd_desc_t *cmd_desc,
