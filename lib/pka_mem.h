@@ -135,11 +135,6 @@ typedef struct
     uint32_t alloc_bytes;
 } pka_mem_desc_t;
 
-/// Return the size (in bytes) of the largest memory chunk available.
-uint32_t pka_mem_largest_chunk_size(uint32_t ring_id);
-
-/// Return the size (in bytes) of the used memory starting at the given offset.
-uint32_t pka_mem_in_use_size(uint32_t ring_id, uint16_t offset);
 
 /// Check whether data memory is full or not. This function is used to
 /// tell whether or not pka_mem_alloc will succeed or not. Returns FALSE

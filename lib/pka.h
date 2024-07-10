@@ -216,6 +216,10 @@ void pka_term_local(pka_handle_t handle);
 /// @param handle       An initialized PKA handle.
 uint8_t pka_get_rings_byte_order(pka_handle_t handle);
 
+// user_data value used to indicate the context of async_jobs context 
+// so that there is no need to acquire lock
+#define USER_DATA_POLLING  1
+
 /// MAX_OPERAND_CNT defines the largest number of big integer operands used by
 /// any operation in this API.
 #define MAX_OPERAND_CNT     11
@@ -387,6 +391,20 @@ typedef struct  // 50 bytes long
 ///
 /// @return             0 on success, and 1 on failure.
 int pka_get_result(pka_handle_t handle, pka_results_t* results);
+
+/// Return results pending in queue that match user_data.
+// This function handles the scenarios of async and sync pka request.
+// user_data is used to distinguish the two.
+// In sync mode, lock is acquired and relased inside this function.
+// In async mode, lock is acquired by caller: polling_func.
+///
+/// @param handle       An initialized PKA handle.
+/// @param results      The results structure to store the PK results.
+/// @param user_data    Find result with matching user_data value.
+///
+/// @return             0 on success, and 1 on failure.
+int pka_get_result_by_user_data(pka_handle_t handle, pka_results_t* results, 
+		                void *user_data);
 
 /// Return if there is pending results in queue.
 ///

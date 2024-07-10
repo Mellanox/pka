@@ -40,6 +40,8 @@ struct poll_args {
     ecc_point_t   **ecc_point;
 };
 
+static pka_atomic32_t pka_async_curr_jobs_cnt;
+
 // Start statistics counters. Returns the command number associated with
 // Start statistics counters. Returns the command number associated with
 // a statistic entry.
@@ -268,10 +270,12 @@ pka_instance_t pka_init_global(const char *name,
     // Initialize PK context info
     pka_atomic64_init(&pka_gbl_info->lock, 0);
     pka_atomic32_init(&pka_gbl_info->workers_cnt, 0);
+    pka_atomic32_init(&pka_async_curr_jobs_cnt, 0);
     pka_gbl_info->flags           = flags;
     pka_gbl_info->queues_cnt      = queue_cnt;
     pka_gbl_info->cmd_queue_size  = cmd_queue_size;
     pka_gbl_info->rslt_queue_size = result_queue_size;
+
     // Init memory pointer.
     pka_gbl_info->mem_ptr = (uint8_t *) pka_gbl_info->mem;
 
@@ -583,6 +587,11 @@ static int pka_cmd_enqueue(pka_global_info_t    *gbl_info,
     alloc.ring   = ring_info;
     // Allocate some window RAM for the total set vectors.
     base_offset  = pka_mem_alloc(ring_info->ring_id, cmd_desc->operands_len);
+    if (0 == base_offset )
+    {
+        PKA_DEBUG(PKA_USER, "there are no rings available\n");
+        return -ENOBUFS;
+    }
     max_offset   = base_offset + cmd_desc->operands_len;
     // Set operands offsets
     alloc.dst_offset       = base_offset;
@@ -611,6 +620,13 @@ static int pka_cmd_enqueue(pka_global_info_t    *gbl_info,
 
     // increment the request counter.
     gbl_info->requests_cnt += 1;
+
+    // increment async current outstanding jobs count
+    // Need to check every time due to openssl speed test would do sync requests
+    // first. Followed by async if -async_jobs n is specified.
+    if ( NULL != ASYNC_get_current_job()) {
+         pka_atomic32_inc(&pka_async_curr_jobs_cnt);
+    }
 
     // Capture overhead cycles cnt
     pka_stats_overhead_cycles_cnt(worker_id, cmd_desc->cmd_num);
@@ -807,7 +823,6 @@ static ecc_point_t *malloc_ecc_point(uint32_t x_buf_len,
     return point;
 }
 
-
 static unsigned int g_pka_responses = 0;
 
 void* polling_func(void* args)
@@ -825,6 +840,16 @@ void* polling_func(void* args)
     do {
        int errors = 0, count = 0;
 
+       uint32_t async_jobs_cnt = pka_atomic32_load(&pka_async_curr_jobs_cnt);
+
+       // Only do async result query here when there is outstanding async request
+       // This check handles the scenarios of mixed async and async in openssl
+       // speed tests.
+       if ( 0 == async_jobs_cnt )  
+       {
+           usleep(100);
+           continue;
+       } 
        do {
            lock = pka_try_acquire_lock(&t_args->local_info->gbl_info->lock.v,
                                         t_args->local_info->id, false);
@@ -836,6 +861,11 @@ void* polling_func(void* args)
        while (lock != LOCK_ACQUIRED);
        pka_rslt_dequeue(t_args->local_info, &errors, &count);
 
+       // For openssl speed test in async_jobs, it runs test with synchronous mode first and saves results 
+       // before it runs tests in async_jobs context. With async_jobs_cnt, it would make sure that the 
+       // subsequent tests and this polling thread will not take more results than needed. Since tests
+       // are run with increasing key lengths for for individual algorithms.
+
        for (int i =0; i < count; ++i)
        {
            pka_results_t results;
@@ -844,7 +874,9 @@ void* polling_func(void* args)
            memset(&results, 0, sizeof(pka_results_t));
            init_results_operand(&results, 2, res1, MAX_BYTE_LEN, res2, MAX_BYTE_LEN);
 
-           pka_get_result((pka_handle_t) t_args->local_info, &results);
+	   // Passing USER_DATA_POLLING in order to handle locking. In async polling case here, lock is 
+	   // acquired already. pka_get_result_by_user_data call shall acquire lock only in sync context.
+           pka_get_result_by_user_data((pka_handle_t) t_args->local_info, &results, (void*)USER_DATA_POLLING);
            if (results.status == RC_NO_ERROR)
            {
 	       struct poll_args *p_args;
@@ -871,6 +903,7 @@ void* polling_func(void* args)
                        copy_operand(&results.results[1], &(*p_args->ecc_point)->y);
                    }
                    ++total_rslts;
+                   pka_atomic32_dec(&pka_async_curr_jobs_cnt);
                    if ( -1 == write(p_args->fd + 1, &c, 1))
 		   {
 		       perror(" polling write ");
@@ -940,14 +973,7 @@ static pka_status_t pka_submit_cmd(pka_handle_t    handle,
         return FAILURE;
     }
 
-    if (NULL == job) 
-    {
-        // SYNC mode
-	int ret = pka_rslt_dequeue(local_info, &errors, &count);
-        if (ret)
-            PKA_DEBUG(PKA_USER, "failed to dequeue %d results\n", ret);
-    } 
-    else
+    if (NULL != job)
     {
 	ASYNC_WAIT_CTX *ctx = ASYNC_get_wait_ctx(job);
 	int   fd = 0;
@@ -1121,6 +1147,20 @@ static void pka_result_ack(pka_local_info_t *local_info)
 // Return results pending in SW queue.
 int pka_get_result(pka_handle_t handle, pka_results_t *results)
 {
+
+    return pka_get_result_by_user_data(handle, results, NULL);
+
+}
+
+// Return results pending in SW queue.
+// This function handles the scenarios of async and sync pka request.
+// user_data is used to distinguish the two.
+// In sync mode, lock is acquired and relased inside this function. 
+// In async mode, lock is acquired by caller: polling_func.
+int pka_get_result_by_user_data(pka_handle_t   handle, 
+		                pka_results_t *results, 
+				void          *user_data)
+{
     pka_local_info_t      *local_info;
     pka_global_info_t     *gbl_info;
     pka_worker_t          *worker;
@@ -1128,8 +1168,7 @@ int pka_get_result(pka_handle_t handle, pka_results_t *results)
     pka_queue_t           *rslt_queue;
     pka_lock_t             lock;
     uint8_t                worker_id;
-
-    int rc = 0;
+    int                    rc  = SUCCESS;
 
     local_info = (pka_local_info_t *) handle;
     if (!local_info)
@@ -1171,16 +1210,32 @@ int pka_get_result(pka_handle_t handle, pka_results_t *results)
 
     rslt_queue = worker->rslt_queue;
     memset(&rslt_desc, 0, sizeof(pka_queue_rslt_desc_t));
-    if (rc == pka_queue_rslt_dequeue(rslt_queue, &rslt_desc, results))
-    {
-        pka_parse_result(&rslt_desc, results);
-        pka_result_ack(local_info);
-        return SUCCESS;
-    }
 
-    PKA_DEBUG(PKA_USER, "worker %d failed to dequeue result "
+    // Acquire lock only for non async_job context for polling_func already acquire lock before 
+    // call this.
+    if ((void*)USER_DATA_POLLING == user_data ||
+        LOCK_ACQUIRED == pka_try_acquire_lock(&gbl_info->lock.v, local_info->id, false))
+    {
+        rc == pka_queue_rslt_dequeue_by_user_data(rslt_queue, &rslt_desc, results, user_data);
+
+        if ( (void*)USER_DATA_POLLING != user_data )
+        {
+            do {
+                lock = pka_try_release_lock(&gbl_info->lock.v, local_info->id);
+            }
+            while (lock != LOCK_RELEASED);
+        }
+
+        if (rc == SUCCESS)
+        {
+            pka_parse_result(&rslt_desc, results);
+            pka_result_ack(local_info);
+            return SUCCESS;
+        }
+        PKA_DEBUG(PKA_USER, "worker %d failed to dequeue result "
                                 "descriptor from SW queue\n", worker_id);
 
+    }
     return FAILURE;
 }
 

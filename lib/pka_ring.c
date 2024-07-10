@@ -320,7 +320,8 @@ bool pka_ring_pop_tag(pka_ring_hw_rslt_desc_t *result_desc,
 
     udata_info = (pka_udata_info_t *) result_desc->tag;
 
-    if (udata_info->valid == PKA_UDATA_INFO_VALID)
+    // Fix issue with null pointer access violation
+    if (udata_info != NULL && udata_info->valid == PKA_UDATA_INFO_VALID)
     {
         *cmd_num   = udata_info->cmd_num;
         *queue_num = udata_info->queue_num;

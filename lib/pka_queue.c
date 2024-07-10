@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <pthread.h>
+
 #include "pka_queue.h"
 #include "pka_mem.h"
 
@@ -55,6 +57,9 @@ pka_queue_t *pka_queue_create(ssize_t size, uint32_t flags, void *mem)
     q->size      = q_size;
     q->mask      = q_size - 1;
     q->capacity  = q->mask;
+
+    q->mutex = malloc(sizeof(pthread_mutex_t));
+    pthread_mutex_init(q->mutex, NULL);
 
     return q;
 }
@@ -492,6 +497,37 @@ static __pka_inline void pka_queue_do_enqueue(pka_queue_t *queue,
     *head = (*head + entries) & queue->mask;
 }
 
+// read the result header/descriptor w/o dequeue an entry.
+// Implement to handle situation that result at head position
+// does not match the request. 
+static __pka_inline void pka_queue_read_head(pka_queue_t *queue,
+                                             uint32_t    *head,
+                                             uint8_t     *obj_ptr,
+                                             uint32_t     entries)
+{
+    uint32_t idx, size;
+    uint32_t first_chunk, second_chunk;
+    uint8_t  *q_mem;
+
+    idx   = *head & queue->mask;
+    q_mem = &queue->mem[idx];
+    size  = queue->size;
+
+    if (likely(idx + entries < size))
+    {
+        memcpy(obj_ptr, q_mem, entries);
+    }
+    else
+    {
+        first_chunk = size - idx;
+        memcpy(obj_ptr, q_mem, first_chunk);
+
+        q_mem = &queue->mem[0];
+        second_chunk = entries - first_chunk;
+        memcpy((obj_ptr + first_chunk), q_mem, second_chunk);
+    }
+}
+
 // The actual dequeue of pointers on the queue. Placed here since identical
 // code needed in both header and data dequeue.
 static __pka_inline void pka_queue_do_dequeue(pka_queue_t *queue,
@@ -677,11 +713,13 @@ int pka_queue_rslt_enqueue(pka_queue_t             *queue,
     if (queue->flags != PKA_QUEUE_TYPE_RSLT)
         return -EPERM;
 
+    pthread_mutex_lock(queue->mutex);
     total_size = pka_queue_move_prod_head(queue, rslt_desc->size, &prod_head,
                                             &prod_next, &free_entries);
     if (total_size == 0)
     {
         PKA_DEBUG(PKA_QUEUE, "not enough room in queue\n");
+        pthread_mutex_unlock(queue->mutex);
         __QUEUE_STAT_ADD(queue, enq_fail_objs, 1);
         return -ENOBUFS;
     }
@@ -770,6 +808,7 @@ int pka_queue_rslt_enqueue(pka_queue_t             *queue,
 
     pka_queue_update_tail(&queue->prod, prod_next, 1);
 
+    pthread_mutex_unlock(queue->mutex);
     __QUEUE_STAT_ADD(queue, enq_success, 1);
 
     return 0;
@@ -891,9 +930,11 @@ int pka_queue_cmd_dequeue(pka_queue_t            *queue,
     return 0;
 }
 
-int pka_queue_rslt_dequeue(pka_queue_t            *queue,
-                           pka_queue_rslt_desc_t  *rslt_desc,
-                           pka_results_t          *results)
+
+int pka_queue_rslt_dequeue_by_user_data(pka_queue_t            *queue,
+                                        pka_queue_rslt_desc_t  *rslt_desc,
+                                        pka_results_t          *results,
+                                        void                   *user_data)
 {
     pka_queue_rslt_desc_t *dummy_rslt_desc; // used to avoid breaking strict
                                             // aliasing rule.
@@ -911,6 +952,8 @@ int pka_queue_rslt_dequeue(pka_queue_t            *queue,
     // word corresponds to the size.
     // One might just read 32bits using a 'uint32_t *' but for calirity we
     // cast the addresse in the queue.
+
+    pthread_mutex_lock(queue->mutex);
     cons_head       = queue->cons.head;
     if (cons_head + sizeof(pka_queue_rslt_desc_t) < queue->size)
     {
@@ -929,6 +972,7 @@ int pka_queue_rslt_dequeue(pka_queue_t            *queue,
                                             &cons_head, &cons_next, &entries);
     if (total_size == 0)
     {
+        pthread_mutex_unlock(queue->mutex);
         PKA_DEBUG(PKA_QUEUE, "no entries in queue\n");
         __QUEUE_STAT_ADD(queue, deq_fail, 1);
         return -EPERM;
@@ -936,15 +980,18 @@ int pka_queue_rslt_dequeue(pka_queue_t            *queue,
 
     rslt_desc_size = sizeof(pka_queue_rslt_desc_t);
 
-    // Read queue result descriptor.
-    pka_queue_do_dequeue(queue, &cons_head, (uint8_t *) rslt_desc,
+    // Read queue result descriptor w/o dequeue.
+    pka_queue_read_head(queue, &cons_head, (uint8_t *) rslt_desc,
                             rslt_desc_size);
 
+    // advance queue_head
+    cons_head = (cons_head + rslt_desc_size) & queue->mask;
     result_cnt = rslt_desc->result_cnt;
     // Read the operand info and data.
     for (result_idx = 0;  result_idx < result_cnt;  result_idx++)
     {
         result  = &results->results[result_idx];
+
         buf_ptr = result->buf_ptr;
 
         // copy the result operand information.
@@ -971,6 +1018,7 @@ int pka_queue_rslt_dequeue(pka_queue_t            *queue,
 
     pka_queue_update_tail(&queue->cons, cons_next, 0);
 
+    pthread_mutex_unlock(queue->mutex);
     __QUEUE_STAT_ADD(queue, deq_success, 1);
     return 0;
 }
