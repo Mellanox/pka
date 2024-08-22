@@ -872,7 +872,7 @@ static void ShiftTest(thread_args_t *args,
     rc = fcn(args->handle, args->user_data, operand, shift_cnt);
     if (rc != RC_NO_ERROR)
     {
-        CmdFailed(args, __func__, pki_fcn_name, &operand, 2, rc);
+        CmdFailed(args, __func__, pki_fcn_name, &operand, 1, rc);
         return;
     }
 
