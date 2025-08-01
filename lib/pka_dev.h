@@ -33,7 +33,8 @@
 #define PKA_VFIO_CONTAINER_PATH     "/dev/vfio/vfio"
 #define PKA_VFIO_GROUP_FMT          "/dev/vfio/%d"
 
-#define PKA_DEVFS_RING_DEVICES      "/dev/pka/%d"
+#define PKA_DEVFS_RING_DEVICES      "/dev/mlxbf_pka/%d"
+#define PKA_DEVFS_RING_DEVICES_DEPRECATED "/dev/pka/%d"
 
 // Defines specific to device-tree and Linux operating system.
 // Careful, all constants MUST be conform with both devicetree
