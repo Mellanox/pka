@@ -2636,12 +2636,20 @@ static int pka_dev_open_ring_file(pka_ring_info_t *ring_info)
     // Invalidate the group
     ring_info->group = -EINVAL;
 
+    // First try the PKA device file name with mlxbf_ prefix
     snprintf(file, sizeof(file), PKA_DEVFS_RING_DEVICES, ring_info->ring_id);
     ring_info->fd = open(file, O_RDWR);
     if (ring_info->fd < 0)
-        PKA_DEBUG(PKA_DEV,
-                  "cannot open the PKA ring %d\n",
-                    ring_info->ring_id);
+    {
+        // Try the PKA device file name without prefix
+        snprintf(file, sizeof(file), PKA_DEVFS_RING_DEVICES_DEPRECATED, ring_info->ring_id);
+        ring_info->fd = open(file, O_RDWR);
+        if (ring_info->fd < 0)
+            PKA_DEBUG(PKA_DEV,
+                      "cannot open the PKA ring %d\n",
+                      ring_info->ring_id);
+    }
+
     return ring_info->fd;
 }
 #endif
