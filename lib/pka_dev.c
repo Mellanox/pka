@@ -19,6 +19,7 @@
 #endif
 
 #include "pka_dev.h"
+#include "pka_ioctl.h"
 
 #ifdef __KERNEL__
 
@@ -2337,7 +2338,7 @@ int pka_dev_get_ring_info(pka_ring_info_t *ring_info)
         return -EINVAL;
 
     // Get ring parameters
-    ret = ioctl(ring_info->fd, PKA_GET_RING_INFO, &hw_ring_info);
+    ret = PKA_IOCTL_GET_RING_INFO(ring_info->fd, &hw_ring_info);
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to get ring information\n");
@@ -2754,7 +2755,7 @@ int pka_dev_mmap_ring(pka_ring_info_t *ring_info)
         return -EINVAL;
 
     // Get ring region information
-    ret = ioctl(ring_info->fd, PKA_RING_GET_REGION_INFO, &region_info);
+    ret = PKA_IOCTL_GET_REGION_INFO(ring_info->fd, &region_info);
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to get ring region info\n");
