@@ -10,12 +10,12 @@
 #else
 #include <stdint.h>
 #include <sys/ioctl.h>
+#include <errno.h>
 #endif
 
-#define PKA_IOC_TYPE 0xB7
+#define PKA_IOC_TYPE 0xBF
+#define PKA_IOC_TYPE_ALT 0xB7
 
-/// PKA_RING_GET_REGION_INFO - _IORW(PKA_IOC_TYPE, 0x0, pka_dev_region_info_t)
-///
 /// Retrieve information about a device region. This is intended to describe
 /// MMIO, I/O port, as well as bus specific regions (ex. PCI config space).
 /// Zero sized regions may be used to describe unimplemented regions.
@@ -31,9 +31,8 @@ typedef struct
     uint64_t mem_offset;   ///< Memory region offset from start of device fd.
 } pka_dev_region_info_t;
 #define PKA_RING_GET_REGION_INFO _IOWR(PKA_IOC_TYPE, 0x0, pka_dev_region_info_t)
+#define PKA_RING_GET_REGION_INFO_ALT _IOWR(PKA_IOC_TYPE_ALT, 0x0, pka_dev_region_info_t)
 
-/// PKA_GET_RING_INFO - _IORW(PKA_IOC_TYPE, 0x1, pka_dev_ring_info_t)
-///
 /// Retrieve information about a ring. This is intended to describe ring
 /// information words located in PKA_BUFFER_RAM. Ring information includes
 /// base addresses, size and statistics.
@@ -76,15 +75,13 @@ typedef struct // Bluefield specific ring information
 
 } pka_dev_hw_ring_info_t;
 #define PKA_GET_RING_INFO   _IOWR(PKA_IOC_TYPE, 0x1, pka_dev_hw_ring_info_t)
+#define PKA_GET_RING_INFO_ALT   _IOWR(PKA_IOC_TYPE_ALT, 0x1, pka_dev_hw_ring_info_t)
 
-/// PKA_CLEAR_RING_COUNTERS - _IO(PKA_IOC_TYPE, 0x2)
-///
 /// Clear counters. This is intended to reset all command and result counters.
 /// Return: 0 on success, -errno on failure.
 #define PKA_CLEAR_RING_COUNTERS  _IO(PKA_IOC_TYPE, 0x2)
+#define PKA_CLEAR_RING_COUNTERS_ALT  _IO(PKA_IOC_TYPE_ALT, 0x2)
 
-/// PKA_GET_RANDOM_BYTES - _IOWR(PKA_IOC_TYPE, 0x3, pka_dev_trng_info_t)
-///
 /// Get random bytes from True Random Number Generator(TRNG).
 /// Return: 0 on success, -errno on failure.
 typedef struct // True Random Number Generator information
@@ -97,5 +94,40 @@ typedef struct // True Random Number Generator information
 
 } pka_dev_trng_info_t;
 #define PKA_GET_RANDOM_BYTES  _IOWR(PKA_IOC_TYPE, 0x3, pka_dev_trng_info_t)
+#define PKA_GET_RANDOM_BYTES_ALT  _IOWR(PKA_IOC_TYPE_ALT, 0x3, pka_dev_trng_info_t)
+
+#ifndef __KERNEL__
+// ioctl wrapper that tries both PKA ioctl numbers
+// This allows the library to work with drivers using either 0xB7 or 0xBF
+static inline int pka_ioctl_compat(int fd,
+				   unsigned long primary_cmd,
+				   unsigned long alt_cmd,
+				   void *arg)
+{
+    int ret;
+
+    // Try primary ioctl number first (0xB7 based)
+    ret = ioctl(fd, primary_cmd, arg);
+    if (ret == -1 && errno == ENOTTY) {
+        // If not supported, try alternate ioctl number (0xBF based)
+        ret = ioctl(fd, alt_cmd, arg);
+    }
+
+    return ret;
+}
+
+// Convenience macros for each PKA ioctl command
+#define PKA_IOCTL_GET_REGION_INFO(fd, arg) \
+    pka_ioctl_compat(fd, PKA_RING_GET_REGION_INFO, PKA_RING_GET_REGION_INFO_ALT, arg)
+
+#define PKA_IOCTL_GET_RING_INFO(fd, arg) \
+    pka_ioctl_compat(fd, PKA_GET_RING_INFO, PKA_GET_RING_INFO_ALT, arg)
+
+#define PKA_IOCTL_CLEAR_RING_COUNTERS(fd) \
+    pka_ioctl_compat(fd, PKA_CLEAR_RING_COUNTERS, PKA_CLEAR_RING_COUNTERS_ALT, NULL)
+
+#define PKA_IOCTL_GET_RANDOM_BYTES(fd, arg) \
+    pka_ioctl_compat(fd, PKA_GET_RANDOM_BYTES, PKA_GET_RANDOM_BYTES_ALT, arg)
+#endif
 
 #endif // __PKA_IOCTL_H__

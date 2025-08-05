@@ -22,6 +22,7 @@
 #include "pka_utils.h"
 #include "pka_vectors.h"
 #include "pka_mem.h"
+#include "pka_ioctl.h"
 
 #define PKA_INVALID_OPERANDS    0x0
 
@@ -2570,7 +2571,7 @@ int pka_get_rand_bytes(pka_handle_t  handle,
         if (!ring_info)
             continue;
 
-        ret = ioctl(ring_info->fd, PKA_GET_RANDOM_BYTES, &trng_info);
+        ret = PKA_IOCTL_GET_RANDOM_BYTES(ring_info->fd, &trng_info);
         if (!ret)
             return buf_len;
 
