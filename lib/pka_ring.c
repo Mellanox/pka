@@ -7,6 +7,7 @@
 #include "pka_ring.h"
 #include "pka_mem.h"
 #include "pka_dev.h"
+#include "pka_ioctl.h"
 
 #include "pka_utils.h"
 
@@ -80,7 +81,7 @@ static bool pka_ring_has_nonzero_counters(pka_ring_info_t *ring)
         PKA_DEBUG(PKA_RING, "non-zero HW counters - reinit PK block\n");
 
         // reset all command and result counters.
-        if (ioctl(ring->fd, PKA_CLEAR_RING_COUNTERS))
+        if (PKA_IOCTL_CLEAR_RING_COUNTERS(ring->fd))
             PKA_ERROR(PKA_RING,
                 "failed to clear non-zero CMMD_CTR_INC_x and RSLT_CTR_DEC_x\n");
 
