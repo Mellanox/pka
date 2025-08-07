@@ -19,6 +19,7 @@
 #endif
 
 #include "pka_dev.h"
+#include "pka_ioctl.h"
 
 #ifdef __KERNEL__
 
@@ -2337,7 +2338,7 @@ int pka_dev_get_ring_info(pka_ring_info_t *ring_info)
         return -EINVAL;
 
     // Get ring parameters
-    ret = ioctl(ring_info->fd, PKA_GET_RING_INFO, &hw_ring_info);
+    ret = PKA_IOCTL_GET_RING_INFO(ring_info->fd, &hw_ring_info);
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to get ring information\n");
@@ -2636,12 +2637,20 @@ static int pka_dev_open_ring_file(pka_ring_info_t *ring_info)
     // Invalidate the group
     ring_info->group = -EINVAL;
 
+    // First try the PKA device file name with mlxbf_ prefix
     snprintf(file, sizeof(file), PKA_DEVFS_RING_DEVICES, ring_info->ring_id);
     ring_info->fd = open(file, O_RDWR);
     if (ring_info->fd < 0)
-        PKA_DEBUG(PKA_DEV,
-                  "cannot open the PKA ring %d\n",
-                    ring_info->ring_id);
+    {
+        // Try the PKA device file name without prefix
+        snprintf(file, sizeof(file), PKA_DEVFS_RING_DEVICES_DEPRECATED, ring_info->ring_id);
+        ring_info->fd = open(file, O_RDWR);
+        if (ring_info->fd < 0)
+            PKA_DEBUG(PKA_DEV,
+                      "cannot open the PKA ring %d\n",
+                      ring_info->ring_id);
+    }
+
     return ring_info->fd;
 }
 #endif
@@ -2746,7 +2755,7 @@ int pka_dev_mmap_ring(pka_ring_info_t *ring_info)
         return -EINVAL;
 
     // Get ring region information
-    ret = ioctl(ring_info->fd, PKA_RING_GET_REGION_INFO, &region_info);
+    ret = PKA_IOCTL_GET_REGION_INFO(ring_info->fd, &region_info);
     if (ret)
     {
         PKA_ERROR(PKA_DEV, "failed to get ring region info\n");
