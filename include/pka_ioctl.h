@@ -13,8 +13,8 @@
 #include <errno.h>
 #endif
 
-#define PKA_IOC_TYPE 0xBF
-#define PKA_IOC_TYPE_ALT 0xB7
+#define PKA_IOC_TYPE 0xB7
+#define PKA_IOC_TYPE_ALT 0xBF
 
 /// Retrieve information about a device region. This is intended to describe
 /// MMIO, I/O port, as well as bus specific regions (ex. PCI config space).
@@ -107,10 +107,10 @@ static inline int pka_ioctl_compat(int fd,
     int ret;
 
     // Try primary ioctl number first (0xB7 based)
-    ret = ioctl(fd, primary_cmd, arg);
+    ret = ioctl(fd, alt_cmd, arg);
     if (ret == -1 && errno == ENOTTY) {
         // If not supported, try alternate ioctl number (0xBF based)
-        ret = ioctl(fd, alt_cmd, arg);
+        ret = ioctl(fd, primary_cmd, arg);
     }
 
     return ret;
