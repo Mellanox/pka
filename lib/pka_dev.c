@@ -1794,6 +1794,7 @@ static int pka_dev_init_shim(pka_dev_shim_t *shim)
 
     shim->trng_enabled   = PKA_SHIM_TRNG_ENABLED;
     shim->trng_err_cycle = 0;
+    mutex_init(&shim->mutex);
 
     // Configure the TRNG
     ret = pka_dev_config_trng_drbg(&shim->resources.aic_csr,
@@ -1818,7 +1819,6 @@ static int pka_dev_init_shim(pka_dev_shim_t *shim)
         shim->trng_enabled = PKA_SHIM_TRNG_DISABLED;
     }
 
-    mutex_init(&shim->mutex);
     shim->busy_ring_num  = 0;
     shim->status         = PKA_SHIM_STATUS_INITIALIZED;
 
