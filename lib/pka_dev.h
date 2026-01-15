@@ -13,6 +13,7 @@
 ///
 
 #ifdef __KERNEL__
+#include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/types.h>
 #include "pka_firmware.h"
@@ -157,6 +158,7 @@ struct pka_dev_mem_res
 /// PKA Shim structure
 struct pka_dev_shim_s
 {
+    struct device         *dev;               ///< backing struct device for devm_pka_dev_create
     struct pka_dev_mem_res mem_res;
 
     uint64_t               trng_err_cycle;    ///< TRNG error cycle
@@ -263,7 +265,8 @@ int pka_dev_unregister_ring(pka_dev_ring_t *ring);
 /// Register PKA IO block. This function initializes a shim and configures its
 /// related resources, and returns a pointer to that ring.
 pka_dev_shim_t *pka_dev_register_shim(uint32_t shim_id, uint8_t shim_fw_id,
-                                      struct pka_dev_mem_res *mem_res);
+                                      struct pka_dev_mem_res *mem_res,
+                                      struct device *dev);
 
 /// Unregister PKA IO block
 int pka_dev_unregister_shim(pka_dev_shim_t *shim);
