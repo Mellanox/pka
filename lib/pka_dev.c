@@ -204,7 +204,7 @@ static int pka_dev_set_resource_config(pka_dev_shim_t *shim,
                                                    shim->shim_id);
     if (!res_ptr->ioaddr)
     {
-        if (!request_mem_region(res_ptr->base, res_ptr->size, res_ptr->name))
+        if (!devm_request_mem_region(shim->dev, res_ptr->base, res_ptr->size, res_ptr->name))
         {
             PKA_ERROR(PKA_DEV, "failed to get io memory region\n");
             return -EPERM;
@@ -218,7 +218,6 @@ static int pka_dev_set_resource_config(pka_dev_shim_t *shim,
     if (!res_ptr->ioaddr || pka_dev_add_resource(res_ptr, shim->shim_id))
     {
         PKA_ERROR(PKA_DEV, "unable to map io memory\n");
-        release_mem_region(res_ptr->base, res_ptr->size);
         return -ENOMEM;
     }
     return ret;
@@ -237,7 +236,6 @@ static void pka_dev_unset_resource_config(pka_dev_shim_t *shim,
             ret != pka_dev_put_resource(res_ptr, shim->shim_id))
     {
         iounmap(res_ptr->ioaddr);
-        release_mem_region(res_ptr->base, res_ptr->size);
     }
 
     res_ptr->status = PKA_DEV_RES_STATUS_UNMAPPED;
@@ -1945,7 +1943,8 @@ int pka_dev_unregister_ring(pka_dev_ring_t *ring)
 }
 
 static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
-                                               struct pka_dev_mem_res *mem_res)
+                                               struct pka_dev_mem_res *mem_res,
+                                               struct device *dev)
 {
     pka_dev_shim_t *shim;
 
@@ -1962,6 +1961,7 @@ static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
     // Shim state MUST be set to undefined before calling 'pka_dev_create_shim'
     // function
     shim->status = PKA_SHIM_STATUS_UNDEFINED;
+    shim->dev    = dev;
 
     // Set the Window RAM user mode
     split = PKA_SPLIT_WINDOW_RAM_MODE;
@@ -1992,13 +1992,14 @@ static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
 }
 
 pka_dev_shim_t *pka_dev_register_shim(uint32_t shim_id, uint8_t shim_fw_id,
-                                      struct pka_dev_mem_res *mem_res)
+                                      struct pka_dev_mem_res *mem_res,
+                                      struct device *dev)
 {
     pka_dev_shim_t *shim;
 
     pka_firmware_set_id(shim_fw_id);
 
-    shim = __pka_dev_register_shim(shim_id, mem_res);
+    shim = __pka_dev_register_shim(shim_id, mem_res, dev);
 
     if (shim)
     {
