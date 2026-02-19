@@ -1217,7 +1217,7 @@ int pka_get_result_by_user_data(pka_handle_t   handle,
     if ((void*)USER_DATA_POLLING == user_data ||
         LOCK_ACQUIRED == pka_try_acquire_lock(&gbl_info->lock.v, local_info->id, false))
     {
-        rc == pka_queue_rslt_dequeue_by_user_data(rslt_queue, &rslt_desc, results, user_data);
+        rc = pka_queue_rslt_dequeue_by_user_data(rslt_queue, &rslt_desc, results, user_data);
 
         if ( (void*)USER_DATA_POLLING != user_data )
         {
