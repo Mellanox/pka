@@ -67,13 +67,58 @@ AC_ARG_ENABLE([engine],
     [],
     [enable_engine=yes])
 
+build_crypto_backend=none
 AS_IF([test x"$enable_engine" != x"no"],
-    [ENABLED_SUBDIRS="$ENABLED_SUBDIRS engine"
+    [AC_MSG_CHECKING([whether libcrypto provides OpenSSL ENGINE API])
+    pka_saved_CPPFLAGS="$CPPFLAGS"
+    pka_saved_LIBS="$LIBS"
+    CPPFLAGS="$CPPFLAGS $LIBCRYPTO_CFLAGS"
+    LIBS="$LIBS $LIBCRYPTO_LIBS"
+    AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM(
+            [[#include <openssl/engine.h>]],
+            [[ENGINE *e = 0; return ENGINE_set_pkey_meths(e, 0);]]
+        )],
+        [have_openssl_engine_api=yes],
+        [have_openssl_engine_api=no]
+    )
+    CPPFLAGS="$pka_saved_CPPFLAGS"
+    LIBS="$pka_saved_LIBS"
+    AC_MSG_RESULT([$have_openssl_engine_api])
 
-    cryptoenginesdir=$($PKG_CONFIG --variable=enginesdir --silence-errors $with_libcrypto)
-    AC_SUBST([cryptoenginesdir])
+    AC_MSG_CHECKING([whether libcrypto provides OpenSSL Provider API])
+    pka_saved_CPPFLAGS="$CPPFLAGS"
+    pka_saved_LIBS="$LIBS"
+    CPPFLAGS="$CPPFLAGS $LIBCRYPTO_CFLAGS"
+    LIBS="$LIBS $LIBCRYPTO_LIBS"
+    AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM(
+            [[#include <openssl/provider.h>]],
+            [[OSSL_PROVIDER *p = 0; return OSSL_PROVIDER_unload(p);]]
+        )],
+        [have_openssl_provider_api=yes],
+        [have_openssl_provider_api=no]
+    )
+    CPPFLAGS="$pka_saved_CPPFLAGS"
+    LIBS="$pka_saved_LIBS"
+    AC_MSG_RESULT([$have_openssl_provider_api])
+
+    AS_IF([test x"$have_openssl_engine_api" = x"yes"],
+        [ENABLED_SUBDIRS="$ENABLED_SUBDIRS engine"
+        build_crypto_backend=engine
+        cryptoenginesdir=$($PKG_CONFIG --variable=enginesdir --silence-errors $with_libcrypto)
+        AC_SUBST([cryptoenginesdir])],
+        [AS_IF([test x"$have_openssl_provider_api" = x"yes"],
+            [ENABLED_SUBDIRS="$ENABLED_SUBDIRS engine"
+            build_crypto_backend=provider
+            cryptomodulesdir=$($PKG_CONFIG --variable=modulesdir --silence-errors $with_libcrypto)
+            AC_SUBST([cryptomodulesdir])
+            AC_MSG_NOTICE([OpenSSL ENGINE API unavailable; building OpenSSL Provider module instead])],
+            [AC_MSG_WARN([OpenSSL ENGINE API unavailable; disabling engine/provider build])])])
     ]
 )
+AM_CONDITIONAL([BUILD_ENGINE], [test "x$build_crypto_backend" = "xengine"])
+AM_CONDITIONAL([BUILD_PROVIDER], [test "x$build_crypto_backend" = "xprovider"])
 
 dnl Documentation
 AC_ARG_WITH([doxygen],
