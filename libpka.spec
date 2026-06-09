@@ -63,7 +63,7 @@ Provides libpka API documentation and PDF API specification for libpka package
 
 %build
 autoreconf -fiv
-%configure --docdir=%{_pkgdocdir} %{?configure_flags}
+configure --docdir=%{_docdir}/%{name} %{?configure_flags}
 %make_build
 
 %install
@@ -73,29 +73,31 @@ find %{buildroot} -name "*.la" -delete
 
 %files
 %defattr(-, root, root)
-%license %{_pkgdocdir}/COPYING
-%doc %{_pkgdocdir}/README
+%license %{_docdir}/%{name}/COPYING
+%doc %{_docdir}/%{name}/README
 %{_libdir}/*.so*
 
 %files engine
 %defattr(-, root, root)
-%license %{_pkgdocdir}/COPYING
-%doc %{_pkgdocdir}/README.engine
+%license %{_docdir}/%{name}/COPYING
+%doc %{_docdir}/%{name}/README.engine
 %{_libdir}/engine*/*.so
 
 %files testutils
 %defattr(-, root, root)
-%license %{_pkgdocdir}/COPYING
-%doc %{_pkgdocdir}/README.tests
+%license %{_docdir}/%{name}/COPYING
+%doc %{_docdir}/%{name}/README.tests
 %{_bindir}/pka_*
 
 %files devel
 %defattr(-, root, root)
-%license %{_pkgdocdir}/COPYING
+%license %{_docdir}/%{name}/COPYING
 %{_includedir}/*.h
 
 %files doc
 %defattr(-, root, root)
-%license %{_pkgdocdir}/COPYING
-%doc %{_pkgdocdir}/html
+%license %{_docdir}/%{name}/COPYING
+%doc %{_docdir}/%{name}/html
+%doc %{_docdir}/%{name}/pdf
+
 %doc %{_pkgdocdir}/pdf
