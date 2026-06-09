@@ -33,14 +33,14 @@ Requires: %{name} = %{epoch}:%{version}-%{release}
 Provides header files for linking with libpka
 
 %package engine
-Summary: OpenSSL dynamic engine for NVIDIA BlueField PKA
+Summary: OpenSSL PKA crypto module for NVIDIA BlueField PKA
 Group: Development/Libraries
 ExclusiveArch: aarch64
 Requires: %{name} = %{epoch}:%{version}-%{release}, openssl%{?openssl_ver}-libs
 
 %description engine
-This package provides OpenSSL dynamic engine component to support hardware implementation of
-RSA, DSA, DH, ECDH and ECDSA operations with the BlueField PKA hardware.
+This package provides OpenSSL crypto module support for BlueField PKA hardware
+(legacy ENGINE where available, and Provider API on OpenSSL versions that removed ENGINE).
 
 %package testutils
 Summary: Test utilities for NVIDIA BlueField PKA
@@ -63,13 +63,17 @@ Provides libpka API documentation and PDF API specification for libpka package
 
 %build
 autoreconf -fiv
-configure --docdir=%{_docdir}/%{name} %{?configure_flags}
+%configure --docdir=%{_docdir}/%{name} %{?configure_flags}
 %make_build
 
 %install
 %make_install
 find %{buildroot} -name "*.la" -delete
-%{__ln_s} libbfengine.so `find %{buildroot}%{_libdir} -iname 'libbfengine.so' -printf '%%h/pka.so'`
+engine_so_path=`find %{buildroot}%{_libdir} -iname 'libbfengine.so' -print -quit`
+if [ -n "$engine_so_path" ]; then
+    engine_link_target=`find %{buildroot}%{_libdir} -iname 'libbfengine.so' -printf '%%h/pka.so' -quit`
+    %{__ln_s} libbfengine.so "$engine_link_target"
+fi
 
 %files
 %defattr(-, root, root)
@@ -81,7 +85,11 @@ find %{buildroot} -name "*.la" -delete
 %defattr(-, root, root)
 %license %{_docdir}/%{name}/COPYING
 %doc %{_docdir}/%{name}/README.engine
+%if 0%{?rhel} >= 10
+%{_libdir}/ossl-modules/libbfprovider.so
+%else
 %{_libdir}/engine*/*.so
+%endif
 
 %files testutils
 %defattr(-, root, root)
@@ -99,5 +107,3 @@ find %{buildroot} -name "*.la" -delete
 %license %{_docdir}/%{name}/COPYING
 %doc %{_docdir}/%{name}/html
 %doc %{_docdir}/%{name}/pdf
-
-%doc %{_pkgdocdir}/pdf
