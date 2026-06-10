@@ -552,7 +552,7 @@ static int pka_ec_key_export(void *keydata, int selection, OSSL_CALLBACK *param_
     }
     if ((selection & OSSL_KEYMGMT_SELECT_PRIVATE_KEY) != 0 && key->has_private) {
         memcpy(priv_bn, key->private_key, key->private_key_len);
-        params[idx++] = OSSL_PARAM_BN(OSSL_PKEY_PARAM_PRIV_KEY, priv_bn, key->private_key_len);
+        params[idx++] = OSSL_PARAM_construct_BN(OSSL_PKEY_PARAM_PRIV_KEY, priv_bn, key->private_key_len);
     }
     params[idx] = OSSL_PARAM_construct_end();
     return param_cb(params, cbarg);
@@ -640,7 +640,7 @@ static EVP_PKEY *pka_make_default_ec_pkey(const PKA_PROVIDER_EC_KEY *key)
     }
     if (key->has_private) {
         memcpy(priv_bn, key->private_key, key->private_key_len);
-        params[idx++] = OSSL_PARAM_BN(OSSL_PKEY_PARAM_PRIV_KEY, priv_bn, key->private_key_len);
+        params[idx++] = OSSL_PARAM_construct_BN(OSSL_PKEY_PARAM_PRIV_KEY, priv_bn, key->private_key_len);
     }
     params[idx] = OSSL_PARAM_construct_end();
 
@@ -867,7 +867,7 @@ static int pka_rsa_add_bn_param(OSSL_PARAM params[], size_t *idx, const char *na
         return 0;
     if (BN_bn2binpad(bn, tmp, len) != len)
         return 0;
-    params[(*idx)++] = OSSL_PARAM_BN(name, tmp, len);
+    params[(*idx)++] = OSSL_PARAM_construct_BN(name, tmp, len);
     return 1;
 }
 
