@@ -1,5 +1,4 @@
 .PHONY: html
-.INTERMEDIATE: html
 
 DX_CONFIG=Doxyfile
 DX_HTML_OUTPUT=html
