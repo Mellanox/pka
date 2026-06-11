@@ -1,3 +1,40 @@
+Changes:
+
+libpka (2.0-3) UNRELEASED; urgency=low
+
+    Fixed libpka fails to build on RHEL 10.2 — OpenSSL ENGINE API removed
+    
+    - Refactor parameter construction in p_bluefield.c to use OSSL_PARAM_construct_BN for better clarity and consistency. Remove unnecessary .INTERMEDIATE directive from Makefile.am.
+
+    - add OpenSSL backend auto-selection in `configure.ac`:
+      - build legacy ENGINE module when ENGINE API is available
+      - build OpenSSL Provider module when ENGINE API is unavailable but Provider API exists (RHEL 10+)
+    - add provider module implementation in `engine/p_bluefield.c` with:
+      - X25519/X448 keymgmt + keyexch
+      - RSA keymgmt + asym cipher
+      - EC keymgmt + ECDSA signature dispatch
+    - update `engine/Makefile.am` to conditionally build either `libbfengine` or `libbfprovider`
+    - update `libpka.spec`:
+      - replace `%{_pkgdocdir}` with `%{_docdir}/%{name}` for SLES compatibility
+      - package provider module on RHEL 10+ (`%{_libdir}/ossl-modules/libbfprovider.so`)
+      - keep engine packaging path for older RHEL
+      - make engine symlink creation conditional on `libbfengine.so` presence
+    - fix doc build cleanup by removing `.INTERMEDIATE: html` in `doc/Makefile.am` to avoid `unlink: html: Is a directory`
+    
+      RHEL 10.2 ships OpenSSL 3.x with legacy ENGINE APIs removed, causing libpka ENGINE build failures.
+      SLES builds also fail due to `%{_pkgdocdir}` usage in the spec.
+    
+    - `autoreconf -ifv`
+    - `./configure`
+    - `make`
+    - provider module `libbfprovider.so` builds successfully
+    
+    RM #5076015
+
+    Fix fix SLES 15/16 build — %{_pkgdocdir} macro undefined on SLES (arm64)
+    
+    RM #5077628
+
 libpka (2.0-2) UNRELEASED; urgency=low
 
   * Add BF3 MB, HB cards support.
