@@ -686,6 +686,13 @@ static void set_bignum(pka_bignum_t *bn, pka_operand_t *operand)
     bn->top = word_len;
     bn->neg = 0;
 
+        /*
+	 * Important for sizes that are not word-aligned (for example P-521 coords):
+	 * clear destination storage first so stale high bytes from previous values
+	 * do not survive in the top word and corrupt EC point coordinates.
+	*/
+        memset(bn->d, 0, bn->dmax * PKA_BYTES);
+
     // BIG ASSUMPTION: OpenSSL treats all series of bytes (unsigned char
     //                 arrays) depending on the underlying architecture.
     //                 Since we are running in Little endian, no need to
