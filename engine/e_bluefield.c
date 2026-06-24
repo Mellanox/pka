@@ -1955,9 +1955,19 @@ override_pka_methods(const EC_KEY *eckey, EC_GROUP **dup_group_ptr,
     const EC_GROUP *group;
     EC_GROUP       *dup_group;
     EC_KEY         *dup_key;
+    BIGNUM         *field_p;
+    BIGNUM         *field_a;
+    BIGNUM         *field_b;
+    BN_CTX         *bn_ctx;
+    int             field_bits;
 
     rc        = 1;
     group     = EC_KEY_get0_group(eckey);
+    field_p   = NULL;
+    field_a   = NULL;
+    field_b   = NULL;
+    bn_ctx    = NULL;
+    field_bits = 0;
 
     // Duplicate group and eckey in order to override methods.
     dup_group = EC_GROUP_dup(group);
@@ -1970,17 +1980,50 @@ override_pka_methods(const EC_KEY *eckey, EC_GROUP **dup_group_ptr,
         goto end;
     }
 
+    /*
+     * The HW EC method path is validated for up to 512-bit curves.
+     * For larger curves (for example P-521), keep OpenSSL's native
+     * EC method to preserve correctness.
+     */
+    field_p = BN_new();
+    field_a = BN_new();
+    field_b = BN_new();
+    bn_ctx  = BN_CTX_new();
+    if (!field_p || !field_a || !field_b || !bn_ctx)
+    {
+        printf("\n ERROR: Failed to allocate EC field parameters.\n");
+        rc = 0;
+        goto end;
+    }
+
+    if (!EC_GROUP_get_curve(group, field_p, field_a, field_b, bn_ctx))
+    {
+        printf("\n ERROR: Failed to get EC field parameters.\n");
+        rc = 0;
+        goto end;
+    }
+
     dup_group->meth = malloc(sizeof(EC_METHOD));
+    if (!dup_group->meth)
+    {
+        printf("\n ERROR: Failed to allocate EC method.\n");
+        rc = 0;
+        goto end;
+    }
 
     memcpy(dup_group->meth, EC_GROUP_method_of(group), sizeof(EC_METHOD));
 
-    // Override the mul, add and inverse functions with pka engine functions.
-    dup_group->meth->mul                   = engine_pka_ecc_pt_mult;
-    dup_group->meth->add                   = engine_pka_ecc_pt_add;
-    dup_group->meth->field_inverse_mod_ord = engine_pka_bn_mod_inv;
+    field_bits = BN_num_bits(field_p);
+    if (field_bits <= 512)
+    {
+        // Override the mul, add and inverse functions with pka engine functions.
+        dup_group->meth->mul                   = engine_pka_ecc_pt_mult;
+        dup_group->meth->add                   = engine_pka_ecc_pt_add;
+        dup_group->meth->field_inverse_mod_ord = engine_pka_bn_mod_inv;
+    }
 
     // EC_METHOD should be same in EC_GROUP and (generator point)EC_POINT.
-    dup_group->generator->meth             = dup_group->meth;
+    dup_group->generator->meth = dup_group->meth;
 
     if (!EC_KEY_set_group(dup_key, dup_group))
     {
@@ -2001,7 +2044,61 @@ override_pka_methods(const EC_KEY *eckey, EC_GROUP **dup_group_ptr,
     *dup_key_ptr           = dup_key;
 
 end:
+    BN_free(field_p);
+    BN_free(field_a);
+    BN_free(field_b);
+    BN_CTX_free(bn_ctx);
     return rc;
+}
+
+static int
+engine_pka_curve_supported(const EC_KEY *eckey)
+{
+    const EC_GROUP *group;
+    BIGNUM         *field_p;
+    BIGNUM         *field_a;
+    BIGNUM         *field_b;
+    BN_CTX         *bn_ctx;
+    int             field_bits;
+    int             supported;
+
+    if (!eckey)
+        return 0;
+
+    group = EC_KEY_get0_group(eckey);
+    if (!group)
+        return 0;
+
+    field_p = BN_new();
+    field_a = BN_new();
+    field_b = BN_new();
+    bn_ctx  = BN_CTX_new();
+    if (!field_p || !field_a || !field_b || !bn_ctx)
+    {
+        BN_free(field_p);
+        BN_free(field_a);
+        BN_free(field_b);
+        BN_CTX_free(bn_ctx);
+        return 0;
+    }
+
+    if (!EC_GROUP_get_curve(group, field_p, field_a, field_b, bn_ctx))
+    {
+        BN_free(field_p);
+        BN_free(field_a);
+        BN_free(field_b);
+        BN_CTX_free(bn_ctx);
+        return 0;
+    }
+
+    field_bits = BN_num_bits(field_p);
+    supported  = (field_bits <= 512);
+
+    BN_free(field_p);
+    BN_free(field_a);
+    BN_free(field_b);
+    BN_CTX_free(bn_ctx);
+    return supported;
 }
 
 #ifndef NO_ECDH
@@ -2014,6 +2111,8 @@ engine_pka_ecdh_compute_key(unsigned char **pout, size_t *poutlen,
     EC_KEY   *dup_key   = NULL;
     EC_POINT *ecdh_pkey = NULL;
 
+    if (!engine_pka_curve_supported(ecdh))
+	return ossl_ecdh_compute_key(pout, poutlen, pub_key, ecdh);
 
     if (!override_pka_methods(ecdh, &dup_group, &dup_key))
     {
@@ -2047,6 +2146,9 @@ engine_pka_ecdsa_sign(int type, const unsigned char *dgst, int dlen,
     EC_GROUP *dup_group = NULL;
     EC_KEY   *dup_key   = NULL;
 
+    if (!engine_pka_curve_supported(eckey))
+        return ossl_sign(type, dgst, dlen, sig, siglen, kinv, r, eckey);
+
     if (!override_pka_methods(eckey, &dup_group, &dup_key))
     {
         rc = 0;
@@ -2069,6 +2171,9 @@ engine_pka_ecdsa_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp,
     int       rc;
     EC_GROUP *dup_group = NULL;
     EC_KEY   *dup_key   = NULL;
+
+    if (!engine_pka_curve_supported(eckey))
+	return ossl_sign_setup(eckey, ctx_in, kinvp, rp);
 
     if (!override_pka_methods(eckey, &dup_group, &dup_key))
     {
@@ -2094,6 +2199,8 @@ engine_pka_ecdsa_sign_sig(const unsigned char *dgst, int dgst_len,
     EC_KEY    *dup_key   = NULL;
     ECDSA_SIG *ret       = NULL;
 
+    if (!engine_pka_curve_supported(eckey))
+        return ossl_sign_sig(dgst, dgst_len, in_kinv, in_r, eckey);
 
     if (!override_pka_methods(eckey, &dup_group, &dup_key))
     {
@@ -2117,6 +2224,9 @@ engine_pka_ecdsa_verify(int type, const unsigned char *dgst, int dgst_len,
     EC_GROUP *dup_group = NULL;
     EC_KEY   *dup_key   = NULL;
 
+    if (!engine_pka_curve_supported(eckey))
+        return ossl_verify(type, dgst, dgst_len, sigbuf, sig_len, eckey);
+
     if (!override_pka_methods(eckey, &dup_group, &dup_key))
     {
         rc = 0;
@@ -2139,6 +2249,9 @@ engine_pka_ecdsa_verify_sig(const unsigned char *dgst, int dgst_len,
     int       rc;
     EC_GROUP *dup_group = NULL;
     EC_KEY   *dup_key   = NULL;
+
+    if (!engine_pka_curve_supported(eckey))
+        return ossl_verify_sig(dgst, dgst_len, sig, eckey);
 
     if (!override_pka_methods(eckey, &dup_group, &dup_key))
     {
