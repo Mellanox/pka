@@ -1,5 +1,3 @@
-Changes:
-
 libpka (2.0-3) UNRELEASED; urgency=low
 
     Fixed libpka fails to build on RHEL 10.2 — OpenSSL ENGINE API removed
