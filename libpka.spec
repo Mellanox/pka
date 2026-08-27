@@ -75,21 +75,21 @@ if [ -n "$engine_so_path" ]; then
     %{__ln_s} libbfengine.so "$engine_link_target"
 fi
 
+# Package the OpenSSL module configure actually installed (engine and/or
+# provider). %{rhel} is not reliable on DPU builders (defaults to 8 here).
+find %{buildroot} \( -name 'libbfengine.so' -o -name 'pka.so' -o -name 'libbfprovider.so' \) \
+    | sed "s|^%{buildroot}||" | sort -u > openssl-crypto-module.files
+
 %files
 %defattr(-, root, root)
 %license %{_docdir}/%{name}/COPYING
 %doc %{_docdir}/%{name}/README
 %{_libdir}/*.so*
 
-%files engine
+%files engine -f openssl-crypto-module.files
 %defattr(-, root, root)
 %license %{_docdir}/%{name}/COPYING
 %doc %{_docdir}/%{name}/README.engine
-%if 0%{?rhel} >= 10
-%{_libdir}/ossl-modules/libbfprovider.so
-%else
-%{_libdir}/engine*/*.so
-%endif
 
 %files testutils
 %defattr(-, root, root)
