@@ -107,11 +107,13 @@ AS_IF([test x"$enable_engine" != x"no"],
         [ENABLED_SUBDIRS="$ENABLED_SUBDIRS engine"
         build_crypto_backend=engine
         cryptoenginesdir=$($PKG_CONFIG --variable=enginesdir --silence-errors $with_libcrypto)
+        AS_IF([test -z "$cryptoenginesdir"], [cryptoenginesdir='${libdir}/engines'])
         AC_SUBST([cryptoenginesdir])],
         [AS_IF([test x"$have_openssl_provider_api" = x"yes"],
             [ENABLED_SUBDIRS="$ENABLED_SUBDIRS engine"
             build_crypto_backend=provider
             cryptomodulesdir=$($PKG_CONFIG --variable=modulesdir --silence-errors $with_libcrypto)
+            AS_IF([test -z "$cryptomodulesdir"], [cryptomodulesdir='${libdir}/ossl-modules'])
             AC_SUBST([cryptomodulesdir])
             AC_MSG_NOTICE([OpenSSL ENGINE API unavailable; building OpenSSL Provider module instead])],
             [AC_MSG_WARN([OpenSSL ENGINE API unavailable; disabling engine/provider build])])])

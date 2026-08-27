@@ -10,6 +10,8 @@ libpka (2.0-3) UNRELEASED; urgency=low
   * Update libpka.spec for SLES %{_docdir} and RHEL 10+ provider packaging.
   * Fix doc build cleanup in doc/Makefile.am (.INTERMEDIATE html directory).
   * Fix SLES 15/16 build: %{_pkgdocdir} undefined on SLES (RM #5077628).
+  * Package OpenSSL engine/provider files from the configure result instead
+    of claiming engine*/*.so unconditionally (RHEL 10 DPU / OpenSSL 3.2).
 
  -- Shih-Yi Chen <shihyic@nvidia.com>  Thu, 11 Jun 2026 12:31:08 -0400
 

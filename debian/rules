@@ -7,7 +7,15 @@ export LDFLAGS=-Wl,-Bsymbolic-functions
 %:
 	dh $@
 
-#Create engine symlink because strongswan openssl.cnf tries to load library in different places depending on distro
+# Create engine symlink because strongswan openssl.cnf tries to load the
+# library from different paths depending on distro. OpenSSL 3.2+ builds the
+# provider module instead, so only create the link when the engine exists.
+# dh_install errors on unmatched globs, so list only modules that were built.
 execute_after_dh_auto_install:
-	find $(CURDIR)/debian/ -name "*.la" -delete
-	ln -s "libbfengine.so" `find $(CURDIR)/debian/ -iname 'libbfengine.so' -printf '%h/pka.so'`
+	find $(CURDIR)/debian/tmp -name "*.la" -delete 2>/dev/null || true
+	engine_so_path=`find $(CURDIR)/debian/tmp -iname 'libbfengine.so' -print -quit 2>/dev/null || true`; \
+	if [ -n "$$engine_so_path" ]; then \
+		ln -s "libbfengine.so" "`dirname "$$engine_so_path"`/pka.so"; \
+	fi
+	{ find debian/tmp \( -name 'libbfengine.so' -o -name 'pka.so' -o -name 'libbfprovider.so' \) \
+		2>/dev/null | sed 's|^debian/tmp/||' || true; } > debian/libpka1-engine.install
