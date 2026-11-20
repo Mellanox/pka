@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
+// SPDX-FileCopyrightText: © 2023-2026 NVIDIA Corporation & affiliates.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #ifndef __PKA_CONFIG_H__
@@ -41,7 +41,15 @@
 // Define whether to split or not Window RAM during PKA device creation phase.
 #define SPLIT_WINDOW_RAM_MODE_ENABLED        1
 #define SPLIT_WINDOW_RAM_MODE_DISABLED       0
-#define PKA_SPLIT_WINDOW_RAM_MODE            SPLIT_WINDOW_RAM_MODE_DISABLED
+// Master switch. Split mode places each ring's 16KB Window RAM in its own
+// 64KB-aligned alternate window, so a 64KB-page kernel can map one ring
+// without exposing its siblings.
+// BlueField-3 ONLY: BF1/BF2 have no per-ring alternate Window RAM windows, so
+// the driver never selects split mode there, whatever this switch says. On
+// BlueField-3 it is used only when PAGE_SIZE > 16KB (see
+// pka_drv_use_split_window_ram()); 4KB/16KB-page kernels keep the
+// contiguous layout.
+#define PKA_SPLIT_WINDOW_RAM_MODE            SPLIT_WINDOW_RAM_MODE_ENABLED
 // Defines for Window RAM partition. It is valid for 16K memory.
 #define PKA_WINDOW_RAM_RING_MEM_SIZE         0x0800 //  2KB
 #define PKA_WINDOW_RAM_DATA_MEM_SIZE         0x3800 // 14KB

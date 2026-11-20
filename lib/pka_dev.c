@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
+// SPDX-FileCopyrightText: © 2023-2026 NVIDIA Corporation & affiliates.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #ifdef __KERNEL__
@@ -283,7 +283,7 @@ static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
     uint32_t ring_words_off;
     uint32_t ring_cntrs_off;
     uint32_t ring_mem_off;
-    uint32_t ring_mem_base;
+    uint64_t ring_mem_base;     // physical address: may not fit in 32 bits
 
     uint32_t shim_ring_id;
     uint8_t  window_ram_split;
@@ -304,8 +304,7 @@ static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
     ring->shim           = shim;
     ring->resources_num  = PKA_MAX_NUM_RING_RESOURCES;
 
-    shim_ring_id              = ring_id % PKA_MAX_NUM_IO_BLOCK_RINGS;
-    shim->rings[shim_ring_id] = ring;
+    shim_ring_id         = ring_id % PKA_MAX_NUM_IO_BLOCK_RINGS;
 
     // Configure ring information control/status words resource
     ring_info_words_ptr         = &ring->resources.info_words;
@@ -331,8 +330,40 @@ static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
     window_ram_split = shim->window_ram_split;
     if (window_ram_split == PKA_SHIM_WINDOW_RAM_SPLIT_ENABLED)
     {
-        ring_mem_off  = shim_ring_id * PKA_RING_MEM_1_SPACING;
-        ring_mem_base = ring_mem_off + shim->mem_res.alt_wndw_ram_0_base;
+        // Use the ACPI-reported base of this ring's own alternate window
+        // instead of assuming alt_0 + ring * 64KB.
+        switch (shim_ring_id)
+        {
+        case 0:  ring_mem_base = shim->mem_res.alt_wndw_ram_0_base; break;
+        case 1:  ring_mem_base = shim->mem_res.alt_wndw_ram_1_base; break;
+        case 2:  ring_mem_base = shim->mem_res.alt_wndw_ram_2_base; break;
+        default: ring_mem_base = shim->mem_res.alt_wndw_ram_3_base; break;
+        }
+
+        // Split Window RAM exists on BlueField-3 only. Without a per-ring
+        // alternate window there is nothing to map, so refuse to continue.
+        if (!ring_mem_base)
+        {
+            PKA_ERROR(PKA_DEV,
+                      "ring %u has no alternate Window RAM window "
+                      "(split Window RAM is BlueField-3 only)\n",
+                      shim_ring_id);
+            return -EINVAL;
+        }
+
+        // The whole point of split mode is one ring per page, so each
+        // window must start on a page boundary and the window stride must
+        // cover a whole page, or user mmap() would span a sibling ring.
+        if (PAGE_SIZE > PKA_RING_MEM_SIZE &&
+            (!IS_ALIGNED(ring_mem_base, PAGE_SIZE) ||
+             PKA_RING_MEM_1_SPACING < PAGE_SIZE))
+        {
+            PKA_ERROR(PKA_DEV,
+                      "ring %u alt window 0x%llx not %lu-byte page aligned\n",
+                      shim_ring_id, (unsigned long long)ring_mem_base,
+                      (unsigned long)PAGE_SIZE);
+            return -EINVAL;
+        }
     }
     else
     {
@@ -351,12 +382,15 @@ static int pka_dev_init_ring(pka_dev_ring_t *ring, uint32_t ring_id,
     if (!ring->ring_info)
     {
         PKA_ERROR(PKA_DEV, "unable to kmalloc\n");
-        kfree(ring->ring_info);
         return -ENOMEM;
     }
 
     mutex_init(&ring->mutex);
     ring->status  = PKA_DEV_RING_STATUS_INITIALIZED;
+
+    // Publish the ring only once it is fully set up, so that no failure
+    // above can leave a pointer to a ring the caller then frees.
+    shim->rings[shim_ring_id] = ring;
 
     return ret;
 }
@@ -369,7 +403,8 @@ static int pka_dev_release_ring(pka_dev_ring_t *ring)
     pka_dev_shim_t *shim;
     uint32_t        shim_ring_id;
 
-    if (ring->status == PKA_DEV_RING_STATUS_UNDEFINED)
+    // Nothing to release for a slot whose registration failed.
+    if (!ring || ring->status == PKA_DEV_RING_STATUS_UNDEFINED)
         return ret;
 
     if (ring->status == PKA_DEV_RING_STATUS_BUSY)
@@ -1844,6 +1879,9 @@ static int pka_dev_release_shim(pka_dev_shim_t *shim)
     {
         for (ring_idx = 0; ring_idx < shim->rings_num; ring_idx++)
         {
+            if (!shim->rings[ring_idx])
+                continue;
+
             ret = pka_dev_release_ring(shim->rings[ring_idx]);
             if (ret)
             {
@@ -1943,12 +1981,12 @@ int pka_dev_unregister_ring(pka_dev_ring_t *ring)
 }
 
 static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
+                                               uint8_t split,
                                                struct pka_dev_mem_res *mem_res,
                                                struct device *dev)
 {
     pka_dev_shim_t *shim;
 
-    uint8_t  split;
     int      ret = 0;
 
     PKA_DEBUG(PKA_DEV, "register shim id=%u, eip154_start=0x%llx eip154_end=0x%llx\n",
@@ -1962,9 +2000,6 @@ static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
     // function
     shim->status = PKA_SHIM_STATUS_UNDEFINED;
     shim->dev    = dev;
-
-    // Set the Window RAM user mode
-    split = PKA_SPLIT_WINDOW_RAM_MODE;
 
     // Create PKA shim
     ret = pka_dev_create_shim(shim, shim_id, split, mem_res);
@@ -1992,6 +2027,7 @@ static pka_dev_shim_t *__pka_dev_register_shim(uint32_t shim_id,
 }
 
 pka_dev_shim_t *pka_dev_register_shim(uint32_t shim_id, uint8_t shim_fw_id,
+                                      uint8_t split_window_ram,
                                       struct pka_dev_mem_res *mem_res,
                                       struct device *dev)
 {
@@ -1999,7 +2035,7 @@ pka_dev_shim_t *pka_dev_register_shim(uint32_t shim_id, uint8_t shim_fw_id,
 
     pka_firmware_set_id(shim_fw_id);
 
-    shim = __pka_dev_register_shim(shim_id, mem_res, dev);
+    shim = __pka_dev_register_shim(shim_id, split_window_ram, mem_res, dev);
 
     if (shim)
     {

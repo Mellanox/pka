@@ -9,7 +9,7 @@
 Name: libpka
 Epoch: 1
 Version: 2.0
-Release: 3%{?dist}
+Release: 4%{?dist}
 Summary: NVIDIA BlueField Public Key Acceleration (PKA) library
 Group: Development/Libraries
 License: BSD-3-Clause AND OpenSSL
