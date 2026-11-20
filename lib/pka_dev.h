@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: © 2023 NVIDIA Corporation & affiliates.
+// SPDX-FileCopyrightText: © 2023-2026 NVIDIA Corporation & affiliates.
 // SPDX-License-Identifier: BSD-3-Clause
 
 #ifndef __PKA_DEV_H__
@@ -264,7 +264,13 @@ int pka_dev_unregister_ring(pka_dev_ring_t *ring);
 
 /// Register PKA IO block. This function initializes a shim and configures its
 /// related resources, and returns a pointer to that ring.
+/// split_window_ram selects the Window RAM layout: non-zero gives every ring
+/// its own 64KB alternate window (BlueField-3 only), zero keeps the
+/// contiguous layout. The caller must always pass it explicitly: it is a
+/// parameter, not a mem_res field, so a driver written for an older library
+/// fails to build instead of silently getting the contiguous layout.
 pka_dev_shim_t *pka_dev_register_shim(uint32_t shim_id, uint8_t shim_fw_id,
+                                      uint8_t split_window_ram,
                                       struct pka_dev_mem_res *mem_res,
                                       struct device *dev);
 

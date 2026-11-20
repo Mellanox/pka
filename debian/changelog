@@ -1,3 +1,21 @@
+libpka (2.0-4) UNRELEASED; urgency=low
+
+  * Give each PKA ring its own Window RAM page on kernels whose page size is
+    larger than a ring's 16KB slice (e.g. 64KB-page kernels):
+    - choose the Window RAM layout per platform at probe time; the driver
+      passes it to pka_dev_register_shim() in the new split_window_ram
+      argument (BlueField-3 only), replacing the compile-time choice
+    - take each ring's window base from its own ACPI alternate window and
+      fail ring initialisation if it is missing or not page aligned
+    - enable PKA_SPLIT_WINDOW_RAM_MODE by default; it is only applied when
+      the page size is larger than 16KB
+  * Publish a ring in the shim only once it is fully initialised, and skip
+    empty ring slots when a shim is released.
+  * Keep a ring's Window RAM base address in a 64-bit variable so that
+    addresses above 4GB are not truncated.
+
+ -- Aiden Gula <agula@nvidia.com>  Mon, 23 Nov 2026 16:01:57 -0500
+
 libpka (2.0-3) UNRELEASED; urgency=low
 
   * Fix build on RHEL 10.2 after OpenSSL ENGINE API removal (RM #5076015).
