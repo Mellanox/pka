@@ -1,2 +1,1 @@
-# Regenerated at build time by debian/rules with whichever OpenSSL
-# module configure actually produced (libbfengine.so or libbfprovider.so).
+usr/lib/*/engines*/*.so
